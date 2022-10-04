@@ -1,0 +1,21 @@
+---
+title: "argos-blvu"
+author: "Adam Duerr"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Libraries
+```{r}
+library(usethis) #git stuff
+library(renv) #versioning tools
+library(lme4)
+
+
+
+```
+
