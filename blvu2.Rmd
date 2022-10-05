@@ -44,7 +44,7 @@ Load the data
 tic()
 
 data1<- fread("data1.csv")
-
+blvu1 <- fread("blvu1.csv")
 
 cat("
 Ran at: ");Sys.time()
@@ -100,9 +100,9 @@ summary(data1$drd)
 a<- ggplot(data1, aes(as.factor(y), drd))
 a + geom_violin()
 
-# summary(data1$agl)
-# a<- ggplot(data1, aes(agl))
-# a + geom_violin() + facet_grid(y)
+summary(blvu1$agl)
+a<- ggplot(blvu1, aes(agl))
+a + geom_histogram() 
 
 
 

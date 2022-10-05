@@ -100,14 +100,7 @@ tic()
 
 colnames(blvu1)
 
-blvu1$nlcd <- as.factor(blvu1$nlcd_2019_land_cover_l48_20210604_25517)
-
-blvu1a <- subset(blvu1, select = c(Animal_ID, Alias, Date_Time, Latitude, Longitude, Altitude, KPH, Aspect_12, DEM_12, SLOPE_12, TPI_12, TRI_12, EucDist_PriS1_12, nlcd_2019_land_cover_l48_20210604_25517))
-
-blvu1 <- blvu1a; rm(blvu1a)
-
 blvu1$y <- 1
-
 
 names(blvu1)[names(blvu1)=="Aspect_12"]<-"aspect"
 names(blvu1)[names(blvu1)=="DEM_12"]<-"dem"
@@ -116,23 +109,20 @@ names(blvu1)[names(blvu1)=="TPI_12"]<- "tpi"
 names(blvu1)[names(blvu1)=="TRI_12"]<-"tri"
 names(blvu1)[names(blvu1)=="EucDist_PriS1_12"]<-"drd"
 names(blvu1)[names(blvu1)=="nlcd_2019_land_cover_l48_20210604_25517"]<-"nlcd"
+names(blvu1)[names(blvu1)=="Month_LocalTime"]<-"month"
 colnames(blvu1)
 
-#add time variables 
+#add season variable 
 
-blvu1$date <- strptime(blvu1$Date_Time, format = "%m/%d/%Y %H:%M:%S",tz = "GMT")
-
-blvu1$month <- months(blvu1$date, abbreviate = TRUE)
-
-blvu1$season <- if_else(blvu1$month == "Dec", "w", 
-                if_else(blvu1$month == "Jan", "w",
-                if_else(blvu1$month == "Feb","w",
-                if_else(blvu1$month == "Mar", "s",
-                if_else(blvu1$month == "Apr", "s",
-                if_else(blvu1$month ==  "May", "s",
-                if_else(blvu1$month ==  "Jun", "m",
-                if_else(blvu1$month == "Jul", "m",
-                if_else(blvu1$month == "Aug", "m", "f"          
+blvu1$season <- if_else(blvu1$month == 12, "w", 
+                if_else(blvu1$month == 1, "w",
+                if_else(blvu1$month == 2,"w",
+                if_else(blvu1$month == 3, "s",
+                if_else(blvu1$month == 4, "s",
+                if_else(blvu1$month ==  5, "s",
+                if_else(blvu1$month ==  6, "m",
+                if_else(blvu1$month == 7, "m",
+                if_else(blvu1$month == 8, "m", "f"          
                           )))))))))
 
 
@@ -160,9 +150,9 @@ blvu2 <- blvu1 %>% select (id = Animal_ID,
                            drd = drd,
                            nlcd = nlcd,
                            kph = KPH,
-                           date = date,
-                           month = month,
+                           date = Date,
                            season = season,
+                           y = y,
                            )
 
 colnames(random1)
@@ -189,7 +179,6 @@ rand2$kph <- 0
 rand2$alt <- 0
 rand2$y <- 0 
 rand2$date <- 0
-rand2$month <- 0
 rand2$season <- "n"
 
 
@@ -289,6 +278,8 @@ Save data for analysis later
 
 ```{r}
 tic()
+blvu1 <- subset(data1, data1$y == 1)
+random1 <- subset(data1, data1$y ==0)
 
 fwrite(blvu1, "blvu1.csv")
 fwrite(random1, "random1.csv")

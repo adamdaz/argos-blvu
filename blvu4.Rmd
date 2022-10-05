@@ -1,5 +1,5 @@
 ---
-title: "argos-blvu - 3. data analysis BLVU RSF "
+title: "argos-blvu - 4. data analysis BLVU AGL analysis "
 author: "Adam Duerr"
 date: "`r Sys.Date()`"
 output: html_document
@@ -43,7 +43,7 @@ read the data for analysis
 ```{r}
 tic()
 
-data1<- fread("data1.csv")
+blvu1<- fread("blvu1.csv")
 
 
 cat("
@@ -52,134 +52,12 @@ toc()
 ```
 
 
-Analysis of data for BLVU RSF
-
-
-```{r}
-tic()
-
-glm1 <- glm( y ~ -1 +  slope + east + north + dem + tpicat + tricat + nlcdcat + drd , family = binomial  , data = data1, na.action = na.fail)
-
-summary(glm1)
-
-
-
-cat("
-Ran at: ");Sys.time()
-toc()
-```
-
-check fit of model
+Analysis of data for BLVU AGL
 
 ```{r}
 tic()
 
-#residuals
-rglm1<- residuals (glm1, type = "pearson")
-#qqplot of residuals
-qqnorm (rglm1)
-qqline (rglm1)
-# predicted fit
-fglm1 <- fitted(glm1)
-#plot residuals vs predicted fit
-plot(fglm1,rglm1)
-
-
-cat("
-Ran at: ");Sys.time()
-toc()
-```
-
-model 2
-```{r}
-tic()
-
-glm2 <- glm( y ~ -1 +  slopes + east + north + dems + tpicat + tricat + nlcdcat + drds , family = binomial  , data = data1, na.action = na.fail)
-
-summary(glm2)
-
-
-
-cat("
-Ran at: ");Sys.time()
-toc()
-```
-check fit of model
-
-```{r}
-tic()
-
-#residuals
-rglm2<- residuals (glm2, type = "pearson")
-#qqplot of residuals
-qqnorm (rglm2)
-qqline (rglm2)
-# predicted fit
-fglm2 <- fitted(glm2)
-#plot residuals vs predicted fit
-plot(fglm2,rglm2)
-
-
-cat("
-Ran at: ");Sys.time()
-toc()
-```
-
-
-dredge results
-
-
-```{r}
-tic()
-
-dredge1 <- dredge(glm1, rank = "AICc")
-
-write.csv(dredge1, "dredge1.csv")
-
-
-
-
-cat("
-Ran at: ");Sys.time()
-toc()
-```
-
-
-model average
-
-```{r}
-tic()
-
-
-madredge1 <- model.avg(dredge1)
-
-
-cat("
-Ran at: ");Sys.time()
-toc()
-```
-
-
-View results of dredge
-
-
-```{r}
-tic()
-
-summary(dredge1)
-summary(madredge1)
-
-cat("
-Ran at: ");Sys.time()
-toc()
-```
-
-
-
-
-
-```{r}
-tic()
+glmm1 <- glmer (agl ~ )
 
 cat("
 Ran at: ");Sys.time()
