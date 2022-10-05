@@ -1,5 +1,5 @@
 ---
-title: "argos-blvu"
+title: "argos-blvu - 1. Data setup"
 author: "Adam Duerr"
 date: "`r Sys.Date()`"
 output: html_document
@@ -11,11 +11,11 @@ git repo is https:/github.com/adamdaz/argos-blvu/
 
 add info to each chunk to track whether it was run recently and how long it took
 ```{r}
-tic()
-
-cat("
-Ran at: ");Sys.time()
-toc()
+# tic()
+# 
+# cat("
+# Ran at: ");Sys.time()
+# toc()
 ```
 
 
@@ -28,6 +28,7 @@ libraries
 library(usethis) #git stuff
 library(renv) #versioning tools
 library(tictoc) #tracking time
+library(data.table) #allows multi-core processing for reading/writing tables = fast!
 library(lme4)
 library(dplyr)
 library(tidyr)
@@ -41,18 +42,16 @@ import data
 tic()
 
 #import
-# blvu1<- read.csv("wv_blvu.csv")
-# random1<- read.csv("random.csv")
-
-#reset
-blvu1 <- blvu.orig
-random1 <- random.orig
+blvu1<- fread("wv_blvu.csv")
+random1<- fread("random.csv")
 
 
 cat("
 Ran at: ");Sys.time()
 toc()
 ```
+
+
 save original data
 
 ```{r}
@@ -66,7 +65,6 @@ cat("
 Ran at: ");Sys.time()
 toc()
 ```
-
 
 Filter data 
 Remove poor quality points
@@ -287,267 +285,16 @@ Ran at: ");Sys.time()
 toc()
 ```
 
-
-Setup theme for ggplot
+Save data for analysis later
 
 ```{r}
 tic()
 
-thm <- theme_classic(base_size = 14, base_family = "serif") + 
-  theme(strip.background = element_blank()) + 
-  theme(axis.text = element_text( size = 10 ), 
-        axis.title = element_text( size = 12),
-        strip.text = element_text(size = 12))
-
-dev.new(width = 7, height = 2.5, unit = "in")
+fwrite(blvu1, "blvu1.csv")
+fwrite(random1, "random1.csv")
+fwrite(data1, "data1.csv")
 
 cat("
 Ran at: ");Sys.time()
 toc()
 ```
-
-
-
-examine data to look at relationships among variables
-
-```{r}
-tic()
-
-summary(data1$aspect)
-a<- ggplot(data1, aes(aspect))
-a + geom_histogram()
-
-
-summary(data1$north)
-a<- ggplot(data1, aes(as.factor(y), north))
-a + geom_violin()
-
-summary(data1$east)
-a<- ggplot(data1, aes(as.factor(y), east))
-a + geom_violin()
-
-
-summary(data1$drd)
-a<- ggplot(data1, aes(drd))
-a + geom_histogram()
-
-
-summary(data1$drd)
-a<- ggplot(data1, aes(as.factor(y), drd))
-a + geom_violin()
-
-# summary(data1$agl)
-# a<- ggplot(data1, aes(agl))
-# a + geom_violin() + facet_grid(y)
-
-
-
-cor <- cor(data1[,c("lat","lon", "aspect", "tri", "tpi", "slope", "drd")])
-
-cor
-
-
-cat("
-Ran at: ");Sys.time()
-toc()
-```
-
-
-more summaries 
-```{r}
-tic()
-
-a<- ggplot(data1, aes(tricat)) 
-a + geom_bar()+ facet_grid(~y)
-
-a<- ggplot(data1, aes(tpicat))
-a + geom_bar()+ facet_grid(~y)
-
-a<- ggplot(data1, aes(nlcdcat))
-a + geom_bar()+ facet_grid(~y)
-
-cat("
-Ran at: ");Sys.time()
-toc()
-```
-
-Scale variables
-
-
-```{r}
-tic()
-
-data1$drds <- scale(data1$drd, center = TRUE, scale = TRUE)
-data1$dems <- scale(data1$dem, center = TRUE, scale = TRUE)
-data1$slopes <- scale(data1$slope, center = TRUE, scale = TRUE)
-
-
-cat("
-Ran at: ");Sys.time()
-toc()
-```
-
-
-
-
-
-Analysis
-
-
-```{r}
-tic()
-
-glm1 <- glm( y ~ -1 +  slope + east + north + dem + tpicat + tricat + nlcdcat + drd , family = binomial  , data = data1, na.action = na.fail)
-
-summary(glm1)
-
-
-
-cat("
-Ran at: ");Sys.time()
-toc()
-```
-
-check fit of model
-
-```{r}
-tic()
-
-#residuals
-rglm1<- residuals (glm1, type = "pearson")
-#qqplot of residuals
-qqnorm (rglm1)
-qqline (rglm1)
-# predicted fit
-fglm1 <- fitted(glm1)
-#plot residuals vs predicted fit
-plot(fglm1,rglm1)
-
-
-cat("
-Ran at: ");Sys.time()
-toc()
-```
-
-model 2
-```{r}
-tic()
-
-glm2 <- glm( y ~ -1 +  slopes + east + north + dems + tpicat + tricat + nlcdcat + drds , family = binomial  , data = data1, na.action = na.fail)
-
-summary(glm2)
-
-
-
-cat("
-Ran at: ");Sys.time()
-toc()
-```
-check fit of model
-
-```{r}
-tic()
-
-#residuals
-rglm2<- residuals (glm2, type = "pearson")
-#qqplot of residuals
-qqnorm (rglm2)
-qqline (rglm2)
-# predicted fit
-fglm2 <- fitted(glm2)
-#plot residuals vs predicted fit
-plot(fglm2,rglm2)
-
-
-cat("
-Ran at: ");Sys.time()
-toc()
-```
-
-
-dredge results
-
-
-```{r}
-tic()
-
-dredge1 <- dredge(glm1, rank = "AICc")
-
-write.csv(dredge1, "dredge5.csv")
-
-
-
-
-cat("
-Ran at: ");Sys.time()
-toc()
-```
-
-
-model average
-
-```{r}
-tic()
-
-
-madredge1 <- model.avg(dredge1)
-
-
-cat("
-Ran at: ");Sys.time()
-toc()
-```
-
-
-View results of dredge
-
-
-```{r}
-tic()
-
-summary(dredge1)
-summary(madredge1)
-
-cat("
-Ran at: ");Sys.time()
-toc()
-```
-
-
-
-
-
-```{r}
-tic()
-
-cat("
-Ran at: ");Sys.time()
-toc()
-```
-
-
-
-
-
-```{r}
-tic()
-
-cat("
-Ran at: ");Sys.time()
-toc()
-```
-
-
-
-
-
-```{r}
-tic()
-
-cat("
-Ran at: ");Sys.time()
-toc()
-```
-
-
-
