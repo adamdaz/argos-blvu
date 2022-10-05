@@ -5,17 +5,549 @@ date: "`r Sys.Date()`"
 output: html_document
 ---
 
+notes: try to use all lowercase for files just to simplify typing and retyping the names
+use git and renv to track changes to the project
+git repo is https:/github.com/adamdaz/argos-blvu/
+
+add info to each chunk to track whether it was run recently and how long it took
+```{r}
+tic()
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-Libraries
+libraries
 ```{r}
 library(usethis) #git stuff
 library(renv) #versioning tools
+library(tictoc) #tracking time
 library(lme4)
-
-
-
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ResourceSelection)
+library(MuMIn)
 ```
+
+import data
+```{r}
+tic()
+
+#import
+# blvu1<- read.csv("wv_blvu.csv")
+# random1<- read.csv("random.csv")
+
+#reset
+blvu1 <- blvu.orig
+random1 <- random.orig
+
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+save original data
+
+```{r}
+tic()
+
+blvu.orig <- blvu1
+random.orig <- random1
+
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+
+Filter data 
+Remove poor quality points
+HDOP&VDOP >10
+2d points
+```{r}
+tic()
+
+blvu1a<- subset(blvu1, blvu1$Fix>2)
+blvu1b <- subset(blvu1a, blvu1a$HDOP <= 10)
+blvu1c <- subset(blvu1b, blvu1b$VDOP <= 10)
+nrow(blvu1)
+nrow(blvu1a)
+nrow(blvu1b)
+nrow(blvu1c)
+
+blvu1 <- blvu1c
+
+
+#cleanup 
+rm(list = ls()[! ls() %in% c("blvu1","blvu.orig", "random1", "random.orig")])
+
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+
+setup blvu data
+```{r}
+tic()
+
+colnames(blvu1)
+
+blvu1$nlcd <- as.factor(blvu1$nlcd_2019_land_cover_l48_20210604_25517)
+
+blvu1a <- subset(blvu1, select = c(Animal_ID, Alias, Date_Time, Latitude, Longitude, Altitude, KPH, Aspect_12, DEM_12, SLOPE_12, TPI_12, TRI_12, EucDist_PriS1_12, nlcd_2019_land_cover_l48_20210604_25517))
+
+blvu1 <- blvu1a; rm(blvu1a)
+
+blvu1$y <- 1
+
+
+names(blvu1)[names(blvu1)=="Aspect_12"]<-"aspect"
+names(blvu1)[names(blvu1)=="DEM_12"]<-"dem"
+names(blvu1)[names(blvu1)=="SLOPE_12"]<-"slope"
+names(blvu1)[names(blvu1)=="TPI_12"]<- "tpi"
+names(blvu1)[names(blvu1)=="TRI_12"]<-"tri"
+names(blvu1)[names(blvu1)=="EucDist_PriS1_12"]<-"drd"
+names(blvu1)[names(blvu1)=="nlcd_2019_land_cover_l48_20210604_25517"]<-"nlcd"
+colnames(blvu1)
+
+#add time variables 
+
+blvu1$date <- strptime(blvu1$Date_Time, format = "%m/%d/%Y %H:%M:%S",tz = "GMT")
+
+blvu1$month <- months(blvu1$date, abbreviate = TRUE)
+
+blvu1$season <- if_else(blvu1$month == "Dec", "w", 
+                if_else(blvu1$month == "Jan", "w",
+                if_else(blvu1$month == "Feb","w",
+                if_else(blvu1$month == "Mar", "s",
+                if_else(blvu1$month == "Apr", "s",
+                if_else(blvu1$month ==  "May", "s",
+                if_else(blvu1$month ==  "Jun", "m",
+                if_else(blvu1$month == "Jul", "m",
+                if_else(blvu1$month == "Aug", "m", "f"          
+                          )))))))))
+
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+get random points set up correctly with the same variables as blvu data
+combine the two datasets
+```{r}
+tic()
+
+#rename columns in blvu data
+blvu2 <- blvu1 %>% select (id = Animal_ID,
+                           dt = Date_Time,
+                           lat = Latitude,
+                           lon = Longitude,
+                           alt = Altitude,
+                           aspect = aspect,
+                           tri = tri,
+                           dem = dem,
+                           tpi = tpi,
+                           slope = slope,
+                           drd = drd,
+                           nlcd = nlcd,
+                           kph = KPH,
+                           date = date,
+                           month = month,
+                           season = season,
+                           )
+
+colnames(random1)
+# retain only columns that we need 
+rand2 <- random1 %>% select (lat = Lat,
+                           lon = Lon,
+                           aspect = Aspect,
+                           tri = TRI,
+                           dem = DEM,
+                           tpi = TPI,
+                           slope = SLOPE,
+                           drd = drd,
+                           nlcd = nlcd,
+                           )
+
+
+# add additional variables needed
+colnames(blvu2)
+blvu2$y <- 1
+colnames(rand2)
+rand2$id <- 999
+rand2$dt <- 9/9/9999
+rand2$kph <- 0 
+rand2$alt <- 0
+rand2$y <- 0 
+rand2$date <- 0
+rand2$month <- 0
+rand2$season <- "n"
+
+
+data2 <- rbind(rand2, blvu2)
+
+random1<- rand2
+blvu1 <- blvu2
+
+#remove nas from data
+data1 <- na.omit(data2)
+#cleanup 
+rm(list = ls()[! ls() %in% c("blvu1","blvu.orig", "random1", "random.orig", "data1")])
+
+
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+Put together additional variables needed for analysis
+topography
+
+
+```{r}
+tic()
+
+data1a <- subset(data1, aspect>=0)
+data1 <- data1a
+rm(data1a)
+
+ data1$north <- cos(data1$aspect*pi/180)
+ data1$east <- sin(data1$aspect*pi/180)
+
+
+
+
+data1$nlcdcat <- as.factor(data1$nlcd)
+summary(data1$nlcdcat)
+data1$nlcdcat <- as.factor(if_else(data1$nlcd ==11, "water",
+if_else(data1$nlcd ==21, "devel",
+if_else(data1$nlcd ==22, "devel",
+if_else(data1$nlcd ==23, "devel",
+if_else(data1$nlcd ==24, "devel",
+if_else(data1$nlcd ==31, "bare",
+if_else(data1$nlcd ==41, "forest",
+if_else(data1$nlcd ==42, "forest",
+if_else(data1$nlcd ==43, "forest",
+if_else(data1$nlcd ==52, "shrub",
+if_else(data1$nlcd ==71, "grass",
+if_else(data1$nlcd ==81, "ag", 
+if_else(data1$nlcd ==82, "ag",         
+if_else(data1$nlcd ==90, "wetland",         
+if_else(data1$nlcd ==95, "wetland", 
+        
+        "PROBLEM NLCD"))))))))))))))))
+summary(data1$nlcdcat)
+
+
+data1$smootr <- if_else(data1$tri <= 80, 1, 0)
+data1$slighr <- if_else(data1$tri > 80 & data1$tri <= 160, 1, 0)
+data1$lowr <- if_else(data1$tri > 160 & data1$tri <= 240, 1, 0)
+data1$moderr <- if_else(data1$tri > 240 & data1$tri <= 500, 1, 0)
+data1$highr <- if_else(data1$tri > 500, 1, 0)
+
+data1$tricat <- as.factor(if_else(data1$smootr == 1, "smooth", 
+                                 if_else(data1$slighr == 1, "slight",
+                                         if_else(data1$lowr == 1, "low", 
+                                                 if_else(data1$moderr == 1, "moder", 
+                                                         if_else(data1$highr == 1, "high","PROBLEM tri"))))))
+
+summary(data1$tricat)
+
+
+data1$valley <- if_else(data1$tpi < -1,1,0)
+data1$ridge <- if_else(data1$tpi > 1 ,1,0)
+data1$gentle <- if_else(data1$tpi >= -1 & data1$tpi <= 1 & data1$slope<=0.06 ,1,0)
+data1$steep <- if_else(data1$tpi >= -1 & data1$tpi <= 1 & data1$slope>0.06,1,0)
+
+data1$tpicat <- as.factor(if_else(data1$valley == 1, "valley",
+                                 if_else(data1$ridge == 1, "ridge",
+                                         if_else(data1$gentle== 1, "gentle",
+                                                 if_else(data1$steep== 1, "steep","PROBLEM tpi")))))
+
+summary(data1$tpicat)
+
+
+data1$agl <- data1$alt - data1$dem
+
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+
+Setup theme for ggplot
+
+```{r}
+tic()
+
+thm <- theme_classic(base_size = 14, base_family = "serif") + 
+  theme(strip.background = element_blank()) + 
+  theme(axis.text = element_text( size = 10 ), 
+        axis.title = element_text( size = 12),
+        strip.text = element_text(size = 12))
+
+dev.new(width = 7, height = 2.5, unit = "in")
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+
+
+examine data to look at relationships among variables
+
+```{r}
+tic()
+
+summary(data1$aspect)
+a<- ggplot(data1, aes(aspect))
+a + geom_histogram()
+
+
+summary(data1$north)
+a<- ggplot(data1, aes(as.factor(y), north))
+a + geom_violin()
+
+summary(data1$east)
+a<- ggplot(data1, aes(as.factor(y), east))
+a + geom_violin()
+
+
+summary(data1$drd)
+a<- ggplot(data1, aes(drd))
+a + geom_histogram()
+
+
+summary(data1$drd)
+a<- ggplot(data1, aes(as.factor(y), drd))
+a + geom_violin()
+
+# summary(data1$agl)
+# a<- ggplot(data1, aes(agl))
+# a + geom_violin() + facet_grid(y)
+
+
+
+cor <- cor(data1[,c("lat","lon", "aspect", "tri", "tpi", "slope", "drd")])
+
+cor
+
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+
+more summaries 
+```{r}
+tic()
+
+a<- ggplot(data1, aes(tricat)) 
+a + geom_bar()+ facet_grid(~y)
+
+a<- ggplot(data1, aes(tpicat))
+a + geom_bar()+ facet_grid(~y)
+
+a<- ggplot(data1, aes(nlcdcat))
+a + geom_bar()+ facet_grid(~y)
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+Scale variables
+
+
+```{r}
+tic()
+
+data1$drds <- scale(data1$drd, center = TRUE, scale = TRUE)
+data1$dems <- scale(data1$dem, center = TRUE, scale = TRUE)
+data1$slopes <- scale(data1$slope, center = TRUE, scale = TRUE)
+
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+
+
+
+
+Analysis
+
+
+```{r}
+tic()
+
+glm1 <- glm( y ~ -1 +  slope + east + north + dem + tpicat + tricat + nlcdcat + drd , family = binomial  , data = data1, na.action = na.fail)
+
+summary(glm1)
+
+
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+check fit of model
+
+```{r}
+tic()
+
+#residuals
+rglm1<- residuals (glm1, type = "pearson")
+#qqplot of residuals
+qqnorm (rglm1)
+qqline (rglm1)
+# predicted fit
+fglm1 <- fitted(glm1)
+#plot residuals vs predicted fit
+plot(fglm1,rglm1)
+
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+model 2
+```{r}
+tic()
+
+glm2 <- glm( y ~ -1 +  slopes + east + north + dems + tpicat + tricat + nlcdcat + drds , family = binomial  , data = data1, na.action = na.fail)
+
+summary(glm2)
+
+
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+check fit of model
+
+```{r}
+tic()
+
+#residuals
+rglm2<- residuals (glm2, type = "pearson")
+#qqplot of residuals
+qqnorm (rglm2)
+qqline (rglm2)
+# predicted fit
+fglm2 <- fitted(glm2)
+#plot residuals vs predicted fit
+plot(fglm2,rglm2)
+
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+
+dredge results
+
+
+```{r}
+tic()
+
+dredge1 <- dredge(glm1, rank = "AICc")
+
+write.csv(dredge1, "dredge5.csv")
+
+
+
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+
+model average
+
+```{r}
+tic()
+
+
+madredge1 <- model.avg(dredge1)
+
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+
+View results of dredge
+
+
+```{r}
+tic()
+
+summary(dredge1)
+summary(madredge1)
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+
+
+
+
+```{r}
+tic()
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+
+
+
+
+```{r}
+tic()
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+
+
+
+
+```{r}
+tic()
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+
 
