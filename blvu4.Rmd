@@ -45,6 +45,7 @@ tic()
 
 blvu1<- fread("blvu1.csv")
 
+colnames(blvu1)
 
 cat("
 Ran at: ");Sys.time()
@@ -57,7 +58,30 @@ Analysis of data for BLVU AGL
 ```{r}
 tic()
 
-glmm1 <- glmer (agl ~ )
+glmm1 <- lmer (agl ~ aspect + dems + slopes + drds + nlcd + tricat + tpicat + (1|id), data = blvu1 )
+
+summary(glmm1)
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+check fit of model
+
+```{r}
+tic()
+
+#residuals
+rglmm1<- residuals (glmm1, type = "pearson")
+#qqplot of residuals
+qqnorm (rglmm1)
+qqline (rglmm1)
+# predicted fit
+fglmm1 <- fitted(glmm1)
+#plot residuals vs predicted fit
+plot(fglmm1,rglmm1)
+
 
 cat("
 Ran at: ");Sys.time()
@@ -66,11 +90,10 @@ toc()
 
 
 
-
-
 ```{r}
 tic()
 
+summary ()
 cat("
 Ran at: ");Sys.time()
 toc()

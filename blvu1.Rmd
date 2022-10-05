@@ -273,6 +273,21 @@ cat("
 Ran at: ");Sys.time()
 toc()
 ```
+center and scale continuous variables
+
+```{r}
+tic()
+
+data1$dems <- scale(data1$dem, center = T, scale = T)
+data1$slopes <- scale(data1$slope, center = T, scale = T)
+data1$drds <- scale(data1$drd, center = T, scale = T)
+
+  
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
 
 Save data for analysis later
 

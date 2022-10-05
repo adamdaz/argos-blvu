@@ -1,0 +1,166 @@
+---
+title: "argos-blvu - 1. Vulture data checking"
+author: "Adam Duerr"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+notes: try to use all lowercase for files just to simplify typing and retyping the names
+use git and renv to track changes to the project
+git repo is https:/github.com/adamdaz/argos-blvu/
+
+add info to each chunk to track whether it was run recently and how long it took
+```{r}
+# tic()
+# 
+# cat("
+# Ran at: ");Sys.time()
+# toc()
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+libraries
+```{r}
+library(usethis) #git stuff
+library(renv) #versioning tools
+library(tictoc) #tracking time
+library(data.table) #allows multi-core processing for reading/writing tables = fast!
+library(lme4)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ResourceSelection)
+library(MuMIn)
+```
+
+import data
+```{r}
+tic()
+
+#import
+blvu1<- fread("wv_blvu.csv")
+blvu2<- fread("new_blvu.csv")
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+
+Filter data 
+Remove poor quality points
+HDOP&VDOP >10
+2d points
+```{r}
+tic()
+
+blvu1a<- subset(blvu1, blvu1$Fix>2)
+blvu1b <- subset(blvu1a, blvu1a$HDOP <= 10)
+blvu1c <- subset(blvu1b, blvu1b$VDOP <= 10)
+nrow(blvu1)
+nrow(blvu1a)
+nrow(blvu1b)
+nrow(blvu1c)
+
+blvu1 <- blvu1c
+
+blvu2a<- subset(blvu2, blvu2$Fix>2)
+blvu2b <- subset(blvu2a, blvu2a$HDOP <= 20)
+blvu2c <- subset(blvu2b, blvu2b$VDOP <= 20)
+nrow(blvu2)
+nrow(blvu2a)
+nrow(blvu2b)
+nrow(blvu2c)
+
+blvu2 <- blvu2c
+
+
+
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+view data to see if there are outliers
+
+```{r}
+tic()
+
+blvu1$altdiffrate <- blvu1$AltDiff/blvu1$TimeDiff
+blvu1$mdiffrate <- blvu1$M_fromLast/blvu1$TimeDiff
+
+
+ggplot(blvu1, aes(altdiffrate)) +
+  geom_boxplot()
+
+ggplot(blvu1, aes(mdiffrate)) +
+  geom_boxplot()
+
+blvu2$altdiffrate <- blvu2$AltDiff/blvu2$TimeDiff
+blvu2$mdiffrate <- blvu2$M_fromLast/blvu2$TimeDiff
+
+
+ggplot(blvu2, aes(altdiffrate)) +
+  geom_boxplot()
+
+ggplot(blvu2, aes(mdiffrate)) +
+  geom_boxplot()
+
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+write files to look at in GIS
+
+```{r}
+tic()
+
+fwrite(blvu1, "blvu1.intermediate.csv")
+fwrite(blvu2, "blvu2.intermediate.csv")
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+remove observations with very high or low altdiffrates > |40|
+```{r}
+tic()
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+
+```{r}
+tic()
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+
+
+
+
+Save data for analysis later
+
+```{r}
+tic()
+
+fwrite(blvu1, "blvu1checked.csv")
+fwrite(blvu2, "blvu2checked.csv")
+
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
