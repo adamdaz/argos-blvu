@@ -23,6 +23,14 @@ add info to each chunk to track whether it was run recently and how long it took
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+clear environment 
+```{r}
+rm(list = ls())
+
+```
+
+
+
 libraries
 ```{r}
 library(usethis) #git stuff
@@ -41,57 +49,19 @@ import data
 ```{r}
 tic()
 
-#import
-blvu1<- fread("wv_blvu.csv")
+#import blvu data that was processed through blvu0.Rmd
+blvu1<- fread("blvu1_0.csv")
+# blvu2 <- fread("blvu2checked.csv")
+
+#import random points
 random1<- fread("random.csv")
-
-
-cat("
-Ran at: ");Sys.time()
-toc()
-```
-
-
-save original data
-
-```{r}
-tic()
-
-blvu.orig <- blvu1
-random.orig <- random1
-
+# random2<- fread("random2.csv") 
 
 cat("
 Ran at: ");Sys.time()
 toc()
 ```
 
-Filter data 
-Remove poor quality points
-HDOP&VDOP >10
-2d points
-```{r}
-tic()
-
-blvu1a<- subset(blvu1, blvu1$Fix>2)
-blvu1b <- subset(blvu1a, blvu1a$HDOP <= 10)
-blvu1c <- subset(blvu1b, blvu1b$VDOP <= 10)
-nrow(blvu1)
-nrow(blvu1a)
-nrow(blvu1b)
-nrow(blvu1c)
-
-blvu1 <- blvu1c
-
-
-#cleanup 
-rm(list = ls()[! ls() %in% c("blvu1","blvu.orig", "random1", "random.orig")])
-
-
-cat("
-Ran at: ");Sys.time()
-toc()
-```
 
 
 setup blvu data
@@ -266,13 +236,30 @@ data1$tpicat <- as.factor(if_else(data1$valley == 1, "valley",
 summary(data1$tpicat)
 
 
-data1$agl <- data1$alt - data1$dem
-
 
 cat("
 Ran at: ");Sys.time()
 toc()
 ```
+
+
+
+calculate agl and define perched and flight locations
+perched defined as <50 AGL and < 1 KPH
+
+```{r}
+tic()
+
+data1$agl <- data1$alt - data1$dem
+
+data1$perch <- if_else(data1$agl < 50 & data1$kph <1, 1, 0)
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+
 center and scale continuous variables
 
 ```{r}
@@ -296,9 +283,9 @@ tic()
 blvu1 <- subset(data1, data1$y == 1)
 random1 <- subset(data1, data1$y ==0)
 
-fwrite(blvu1, "blvu1.csv")
-fwrite(random1, "random1.csv")
-fwrite(data1, "data1.csv")
+fwrite(blvu1, "blvu1_1.csv")
+fwrite(random1, "random1_1.csv")
+fwrite(data1, "data1_1.csv")
 
 cat("
 Ran at: ");Sys.time()

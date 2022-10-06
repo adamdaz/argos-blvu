@@ -23,6 +23,14 @@ add info to each chunk to track whether it was run recently and how long it took
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+
+clear environment 
+```{r}
+rm(list = ls())
+
+```
+
+
 libraries
 ```{r}
 library(usethis) #git stuff
@@ -55,8 +63,14 @@ Filter data
 Remove poor quality points
 HDOP&VDOP >10
 2d points
+high altitude >2500 but low speed points <5 kph
+very high altitude >5000
+very fast speeds >125 kph
+BuckLee (animal id = 37) after 1/4/2020
 ```{r}
 tic()
+
+
 
 blvu1a<- subset(blvu1, blvu1$Fix>2)
 blvu1b <- subset(blvu1a, blvu1a$HDOP <= 10)
@@ -66,7 +80,12 @@ nrow(blvu1a)
 nrow(blvu1b)
 nrow(blvu1c)
 
-blvu1 <- blvu1c
+blvu1d <- blvu1c[!(blvu1c$Altitude > 2500 & blvu1c$KPH < 5)]
+blvu1e <- blvu1d[!(blvu1d$Altitude > 5000|blvu1d$KPH > 125)]
+blvu1f <- blvu1e[!(blvu1e$Animal_ID == 37 & blvu1e$Date>01/04/2020 )]
+nrow(blvu1e)
+nrow(blvu1f)
+blvu1 <- blvu1f
 
 blvu2a<- subset(blvu2, blvu2$Fix>2)
 blvu2b <- subset(blvu2a, blvu2a$HDOP <= 20)
@@ -75,8 +94,12 @@ nrow(blvu2)
 nrow(blvu2a)
 nrow(blvu2b)
 nrow(blvu2c)
-
-blvu2 <- blvu2c
+blvu2d <- blvu2c[!(blvu2c$Altitude > 2500 & blvu2c$KPH < 5)]
+blvu2e <- blvu2d[!(blvu2d$Altitude > 5000|blvu2d$KPH > 125)]
+blvu2f <- blvu2e[!(blvu2e$Animal_ID == 37 & blvu2e$Date>01/04/2020 )]
+nrow(blvu2e)
+nrow(blvu2f)
+blvu2 <- blvu2f
 
 
 
@@ -95,27 +118,48 @@ blvu1$altdiffrate <- blvu1$AltDiff/blvu1$TimeDiff
 blvu1$mdiffrate <- blvu1$M_fromLast/blvu1$TimeDiff
 
 
-ggplot(blvu1, aes(altdiffrate)) +
-  geom_boxplot()
+ggplot(blvu1, aes(altdiffrate)) +   geom_boxplot()
 
-ggplot(blvu1, aes(mdiffrate)) +
-  geom_boxplot()
+ggplot(blvu1, aes(mdiffrate)) +   geom_boxplot()
 
-blvu2$altdiffrate <- blvu2$AltDiff/blvu2$TimeDiff
-blvu2$mdiffrate <- blvu2$M_fromLast/blvu2$TimeDiff
+ggplot(blvu1, aes(Altitude)) + geom_boxplot()
 
+ggplot(blvu1, aes(KPH)) + geom_boxplot()
 
-ggplot(blvu2, aes(altdiffrate)) +
-  geom_boxplot()
-
-ggplot(blvu2, aes(mdiffrate)) +
-  geom_boxplot()
 
 
 cat("
 Ran at: ");Sys.time()
 toc()
 ```
+
+
+
+```{r}
+tic()
+
+
+blvu2$altdiffrate <- blvu2$AltDiff/blvu2$TimeDiff
+blvu2$mdiffrate <- blvu2$M_fromLast/blvu2$TimeDiff
+
+
+ggplot(blvu2, aes(altdiffrate)) +   geom_boxplot()
+
+ggplot(blvu2, aes(mdiffrate)) +   geom_boxplot()
+
+ggplot(blvu2, aes(Altitude)) +   geom_boxplot()
+
+ggplot(blvu2, aes(KPH)) +   geom_boxplot()
+
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+
+
+
 write files to look at in GIS
 
 ```{r}
@@ -129,24 +173,15 @@ Ran at: ");Sys.time()
 toc()
 ```
 
-remove observations with very high or low altdiffrates > |40|
 ```{r}
 tic()
+
+
 
 cat("
 Ran at: ");Sys.time()
 toc()
 ```
-
-
-```{r}
-tic()
-
-cat("
-Ran at: ");Sys.time()
-toc()
-```
-
 
 
 
@@ -156,8 +191,8 @@ Save data for analysis later
 ```{r}
 tic()
 
-fwrite(blvu1, "blvu1checked.csv")
-fwrite(blvu2, "blvu2checked.csv")
+fwrite(blvu1, "blvu1_0.csv")
+fwrite(blvu2, "blvu2_0.csv")
 
 
 cat("

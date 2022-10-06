@@ -24,6 +24,12 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 
+clear environment 
+```{r}
+rm(list = ls())
+
+```
+
 
 libraries
 ```{r}
@@ -43,8 +49,8 @@ Load the data
 ```{r}
 tic()
 
-data1<- fread("data1.csv")
-blvu1 <- fread("blvu1.csv")
+data1<- fread("data1_1.csv")
+blvu1 <- fread("blvu1_1.csv")
 
 cat("
 Ran at: ");Sys.time()

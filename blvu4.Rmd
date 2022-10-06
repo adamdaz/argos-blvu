@@ -44,21 +44,48 @@ read the data for analysis
 tic()
 
 blvu1<- fread("blvu1.csv")
-
 colnames(blvu1)
 
 cat("
 Ran at: ");Sys.time()
 toc()
 ```
+Identify flying and perch locations
+p = perch f = fly n = not used
+```{r}
+tic()
 
+blvu1$p <- if_else((blvu1$kph < 1 & blvu1$agl < 50),"p", 
+                   if_else((blvu1$agl < -50), "n", "f"))
+
+fly1<- subset(blvu1, blvu1$p == "f")
+
+#fly1$lnagl <- log(fly1$agl+0.1)
+
+summary(fly1)
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+Look at agl data 
+```{r}
+tic()
+
+ggplot(fly1, aes(agl)) + geom_boxplot()
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
 
 Analysis of data for BLVU AGL
 
 ```{r}
 tic()
 
-glmm1 <- lmer (agl ~ aspect + dems + slopes + drds + nlcd + tricat + tpicat + (1|id), data = blvu1 )
+glmm1 <- lmer (agl ~ poly(dems,2) + poly(drds,2) +  poly(slopes,2) + poly(east,2) + poly(north,2) + nlcdcat + tpicat + tricat + (1|id) , data = fly1 )
 
 summary(glmm1)
 
@@ -88,10 +115,12 @@ Ran at: ");Sys.time()
 toc()
 ```
 
-
+dredge 
 
 ```{r}
 tic()
+
+fly.dredge <- dredge(glmm1, rank = "AICc")
 
 summary ()
 cat("
@@ -100,11 +129,13 @@ toc()
 ```
 
 
-
+model average
 
 
 ```{r}
 tic()
+
+mafly <- model.avg(fly.dredge)
 
 cat("
 Ran at: ");Sys.time()

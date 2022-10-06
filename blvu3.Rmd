@@ -24,6 +24,13 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 
+clear environment 
+```{r}
+rm(list = ls())
+
+```
+
+
 libraries
 ```{r}
 library(usethis) #git stuff
@@ -43,7 +50,7 @@ read the data for analysis
 ```{r}
 tic()
 
-data1<- fread("data1.csv")
+data1<- fread("data1_1.csv")
 
 
 cat("
