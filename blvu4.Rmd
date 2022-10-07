@@ -170,7 +170,7 @@ fly.dredge <- pdredge(glmm1, rank = "AICc", cluster=cluster)
 # fly.dredge <- dredge(glmm1, rank = "AICc")
 
 #stop cluster
-stopCluster(clust)
+stopCluster(cluster)
 
 #write results
 fwrite(fly.dredge, "fly.dredge.csv")
@@ -194,5 +194,14 @@ Ran at: ");Sys.time()
 toc()
 ```
 
+Look at model averaged results 
 
+```{r}
+tic()
 
+summary(mafly)
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
