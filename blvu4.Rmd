@@ -24,6 +24,13 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 
+clear environment 
+```{r}
+rm(list = ls())
+
+```
+
+
 libraries
 ```{r}
 library(usethis) #git stuff
@@ -36,6 +43,7 @@ library(tidyr)
 library(ggplot2)
 library(ResourceSelection)
 library(MuMIn)
+library(snow)
 ```
 
 
@@ -60,16 +68,42 @@ blvu1$p <- if_else((blvu1$kph < 1 & blvu1$agl < 50),"p",
 
 fly1<- subset(blvu1, blvu1$p == "f")
 
-#fly1$lnagl <- log(fly1$agl+0.1)
 
 summary(fly1)
 
 cat("
 Ran at: ");Sys.time()
 toc()
+
 ```
 
+Add squared terms to dataset
+
+
+```{r}
+tic()
+
+fly1$dem2 <- fly1$dem^2
+fly1$slope2 <- fly1$slope^2
+fly1$north2 <- fly1$north^2
+fly1$east2 <- fly1$east^2
+fly1$drd2 <- fly1$drd^2
+#center and scale squared terms
+fly1$dem2s <- scale(fly1$dem2, center = T, scale = T)
+fly1$slope2s <- scale(fly1$slope2, center = T, scale = T)
+fly1$drd2s <- scale(fly1$drd2, center = T, scale = T)
+
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+
+
+
 Look at agl data 
+and transformed agl
 ```{r}
 tic()
 
@@ -82,10 +116,12 @@ toc()
 
 Analysis of data for BLVU AGL
 
+ 
+ 
 ```{r}
 tic()
 
-glmm1 <- lmer (agl ~ poly(dems,2) + poly(drds,2) +  poly(slopes,2) + poly(east,2) + poly(north,2) + nlcdcat + tpicat + tricat + (1|id) , data = fly1 )
+glmm1 <- lme4::lmer (agl ~ dems + dem2s + east + east2 + north + north2 + drds + drd2s + nlcdcat + tpicat + tricat + (1|id) , data = fly1 , na.action = na.fail)
 
 summary(glmm1)
 
@@ -115,14 +151,30 @@ Ran at: ");Sys.time()
 toc()
 ```
 
-dredge 
+dredge pdredge for mulit-core analysis
+
 
 ```{r}
 tic()
+#set up the cluster
+cores<-6
+clusterType <- if(length(find.package("snow", quiet = TRUE))) "SOCK" else "PSOCK"
+cluster <- try(makeCluster(getOption("cl.cores", cores), type = clusterType))
+#export data to cluster
+clusterExport(cluster,"fly1")
+#explort package to cluster
+clusterEvalQ(cluster, library(lme4))
 
-fly.dredge <- dredge(glmm1, rank = "AICc")
+#run dredge
+fly.dredge <- pdredge(glmm1, rank = "AICc", cluster=cluster)
+# fly.dredge <- dredge(glmm1, rank = "AICc")
 
-summary ()
+#stop cluster
+stopCluster(clust)
+
+#write results
+fwrite(fly.dredge, "fly.dredge.csv")
+
 cat("
 Ran at: ");Sys.time()
 toc()
