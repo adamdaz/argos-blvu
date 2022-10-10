@@ -43,6 +43,7 @@ library(tidyr)
 library(ggplot2)
 library(ResourceSelection)
 library(MuMIn)
+library(snow)
 ```
 
 
@@ -65,7 +66,7 @@ Analysis of data for BLVU RSF
 ```{r}
 tic()
 
-glm1 <- glm( y ~ -1 +  slope + east + north + dem + tpicat + tricat + nlcdcat + drd , family = binomial  , data = data1, na.action = na.fail)
+glm1 <- glm( y ~ -1 +  slopes + flat*east + flat*north + dems + tpicat + tricat + nlcdcat + dprds + dsrds + dforests + dsolids , family = binomial  , data = data1, na.action = na.fail)
 
 summary(glm1)
 
@@ -98,38 +99,38 @@ toc()
 ```
 
 model 2
-```{r}
-tic()
-
-glm2 <- glm( y ~ -1 +  slopes + east + north + dems + tpicat + tricat + nlcdcat + drds , family = binomial  , data = data1, na.action = na.fail)
-
-summary(glm2)
-
-
-
-cat("
-Ran at: ");Sys.time()
-toc()
+ ```{r}
+# tic()
+# 
+# glm2 <- glm( y ~ -1 +  slopes + east + north + dems + tpicat + tricat + nlcdcat + drds , family = binomial  , data = data1, na.action = na.fail)
+# 
+# summary(glm2)
+# 
+# 
+# 
+# cat("
+# Ran at: ");Sys.time()
+# toc()
 ```
 check fit of model
 
 ```{r}
 tic()
 
-#residuals
-rglm2<- residuals (glm2, type = "pearson")
-#qqplot of residuals
-qqnorm (rglm2)
-qqline (rglm2)
-# predicted fit
-fglm2 <- fitted(glm2)
-#plot residuals vs predicted fit
-plot(fglm2,rglm2)
-
-
-cat("
-Ran at: ");Sys.time()
-toc()
+# #residuals
+# rglm2<- residuals (glm2, type = "pearson")
+# #qqplot of residuals
+# qqnorm (rglm2)
+# qqline (rglm2)
+# # predicted fit
+# fglm2 <- fitted(glm2)
+# #plot residuals vs predicted fit
+# plot(fglm2,rglm2)
+# 
+# 
+# cat("
+# Ran at: ");Sys.time()
+# toc()
 ```
 
 
@@ -139,10 +140,24 @@ dredge results
 ```{r}
 tic()
 
-dredge1 <- dredge(glm1, rank = "AICc")
+#set up the cluster
+cores<-6
+clusterType <- if(length(find.package("snow", quiet = TRUE))) "SOCK" else "PSOCK"
+cluster <- try(makeCluster(getOption("cl.cores", cores), type = clusterType))
+#export data to cluster
+clusterExport(cluster,"data1")
+#explort package to cluster
+clusterEvalQ(cluster, library(stats))
 
-write.csv(dredge1, "dredge1.csv")
+#run dredge
+data.dredge <- pdredge(glm1, rank = "AICc", cluster=cluster)
 
+
+#stop cluster
+stopCluster(cluster)
+
+#write results
+fwrite(data.dredge, "data.dredge.csv")
 
 
 
@@ -158,7 +173,7 @@ model average
 tic()
 
 
-madredge1 <- model.avg(dredge1)
+madredge1 <- model.avg(data.dredge)
 
 
 cat("
@@ -173,7 +188,7 @@ View results of dredge
 ```{r}
 tic()
 
-summary(dredge1)
+summary(data.dredge)
 summary(madredge1)
 
 cat("

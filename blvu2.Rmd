@@ -83,36 +83,37 @@ examine data to look at relationships among variables
 ```{r}
 tic()
 
-summary(data1$aspect)
-a<- ggplot(data1, aes(aspect))
-a + geom_histogram()
 
-
-summary(data1$north)
 a<- ggplot(data1, aes(as.factor(y), north))
 a + geom_violin()
 
-summary(data1$east)
 a<- ggplot(data1, aes(as.factor(y), east))
 a + geom_violin()
 
-
-summary(data1$drd)
-a<- ggplot(data1, aes(drd))
-a + geom_histogram()
-
-
-summary(data1$drd)
-a<- ggplot(data1, aes(as.factor(y), drd))
+a<- ggplot(data1, aes(as.factor(y), slope))
 a + geom_violin()
 
-summary(blvu1$agl)
+a<- ggplot(data1, aes(as.factor(y), dem))
+a + geom_violin()
+
+a<- ggplot(data1, aes(as.factor(y), dsrd))
+a + geom_violin()
+
+a<- ggplot(data1, aes(as.factor(y), dprd))
+a + geom_violin()
+
+a<- ggplot(data1, aes(as.factor(y), dforest))
+a + geom_violin()
+
+a<- ggplot(data1, aes(as.factor(y), dsolid))
+a + geom_violin()
+
 a<- ggplot(blvu1, aes(agl))
 a + geom_histogram() 
 
 
 
-cor <- cor(data1[,c("lat","lon", "aspect", "tri", "tpi", "slope", "drd")])
+cor <- cor(data1[,c("lat","lon", "north", "east", "dem", "tri", "tpi", "slope", "dsrd", "dprd", "dforest", "dsolid")])
 
 cor
 
@@ -147,9 +148,11 @@ toc()
 
 
 
-
+export correlation matrix
 ```{r}
 tic()
+
+fwrite(cor, "cor.csv")
 
 cat("
 Ran at: ");Sys.time()

@@ -51,11 +51,11 @@ tic()
 
 #import blvu data that was processed through blvu0.Rmd
 blvu1<- fread("blvu1_0.csv")
-# blvu2 <- fread("blvu2checked.csv")
+blvu2 <- fread("blvu2_0.csv")
 
 #import random points
 random1<- fread("random.csv")
-# random2<- fread("random2.csv") 
+random2<- fread("new_random.csv") 
 
 cat("
 Ran at: ");Sys.time()
@@ -68,23 +68,33 @@ setup blvu data
 ```{r}
 tic()
 
-colnames(blvu1)
-
 blvu1$y <- 1
 
-names(blvu1)[names(blvu1)=="Aspect_12"]<-"aspect"
-names(blvu1)[names(blvu1)=="DEM_12"]<-"dem"
-names(blvu1)[names(blvu1)=="SLOPE_12"]<-"slope"
-names(blvu1)[names(blvu1)=="TPI_12"]<- "tpi"
-names(blvu1)[names(blvu1)=="TRI_12"]<-"tri"
-names(blvu1)[names(blvu1)=="EucDist_PriS1_12"]<-"drd"
-names(blvu1)[names(blvu1)=="nlcd_2019_land_cover_l48_20210604_25517"]<-"nlcd"
-names(blvu1)[names(blvu1)=="Month_LocalTime"]<-"month"
-colnames(blvu1)
+blvu1a <- blvu1 %>% select (id = Animal_ID,
+                           dt = Date_Time,
+                           ltime = LocalTime,
+                           lat = Latitude,
+                           lon = Longitude,
+                           alt = Altitude,
+                           aspect = Aspect_12,
+                           tri = TRI_12,
+                           dem = DEM_12,
+                           tpi = TPI_12,
+                           slope = SLOPE_12,
+                           nlcd = nlcd_2019_land_cover_l48_20210604_25517,
+                           kph = KPH,
+                           date = Date,
+                           month=Month_LocalTime,
+                           y = y,
+                           dsolid = dist_solid_waste_12_13,
+                           dsrd = dist_secondary_rds_1,
+                           dprd = dist_primary_rds_1,
+                           dforest = dist_forest_1,
+                           )
 
 #add season variable 
 
-blvu1$season <- if_else(blvu1$month == 12, "w", 
+blvu1a$season <- if_else(blvu1$month == 12, "w", 
                 if_else(blvu1$month == 1, "w",
                 if_else(blvu1$month == 2,"w",
                 if_else(blvu1$month == 3, "s",
@@ -96,79 +106,114 @@ blvu1$season <- if_else(blvu1$month == 12, "w",
                           )))))))))
 
 
+blvu2$y <- 1
+
+blvu2a <- blvu2 %>% select (id = Animal_ID,
+                           dt = Date_Time,
+                           ltime = LocalTime,
+                           lat = Latitude,
+                           lon = Longitude,
+                           alt = Altitude,
+                           aspect = Aspect_1,
+                           tri = TRI_1,
+                           dem = DEM_1,
+                           tpi = TPI_1,
+                           slope = SLOPE_1,
+                           nlcd = nlcd_1,
+                           kph = KPH,
+                           date = Date,
+                           month=Month_LocalTime,
+                           y = y,
+                           dsolid = dist_solid_waste_1,
+                           dsrd = dist_secondary_rds_1,
+                           dprd = dist_primary_rds_1,
+                           dforest = dist_forest_1,
+                           )
+
+
+#add season variable 
+
+blvu2a$season <- if_else(blvu2$month == 12, "w", 
+                if_else(blvu2$month == 1, "w",
+                if_else(blvu2$month == 2,"w",
+                if_else(blvu2$month == 3, "s",
+                if_else(blvu2$month == 4, "s",
+                if_else(blvu2$month ==  5, "s",
+                if_else(blvu2$month ==  6, "m",
+                if_else(blvu2$month == 7, "m",
+                if_else(blvu2$month == 8, "m", "f"          
+                          )))))))))
+
+
+blvu2 <- rbind(blvu1a, blvu2a)
+
 cat("
 Ran at: ");Sys.time()
 toc()
 ```
 
 get random points set up correctly with the same variables as blvu data
-combine the two datasets
+combine random and blvu points into data1 dataset
 ```{r}
 tic()
-
-#rename columns in blvu data
-blvu2 <- blvu1 %>% select (id = Animal_ID,
-                           dt = Date_Time,
-                           lat = Latitude,
-                           lon = Longitude,
-                           alt = Altitude,
-                           aspect = aspect,
-                           tri = tri,
-                           dem = dem,
-                           tpi = tpi,
-                           slope = slope,
-                           drd = drd,
-                           nlcd = nlcd,
-                           kph = KPH,
-                           date = Date,
-                           season = season,
-                           y = y,
-                           )
-
-colnames(random1)
 # retain only columns that we need 
-rand2 <- random1 %>% select (lat = Lat,
+rand1a <- random1 %>% select (lat = Lat,
                            lon = Lon,
                            aspect = Aspect,
                            tri = TRI,
                            dem = DEM,
                            tpi = TPI,
                            slope = SLOPE,
-                           drd = drd,
                            nlcd = nlcd,
+                           dsolid = dist_solid_waste_12,
+                           dsrd = dist_secondary_rds_1,
+                           dprd = dist_primary_rds_1,
+                           dforest = dist_forest_1,
+                           )
+
+rand2a <- random2 %>% select (lat = POINT_X,
+                           lon = POINT_Y,
+                           aspect = Aspect,
+                           tri = TRI,
+                           dem = DEM,
+                           tpi = TPI,
+                           slope = SLOPE,
+                           nlcd = nlcd,
+                           dsolid = dist_solid_waste,
+                           dsrd = dist_secondary_rds,
+                           dprd = dist_primary_rds,
+                           dforest = dist_forest,
                            )
 
 
+#combine random datasets
+
+rand2 <- rbind(rand1a, rand2a)
+
 # add additional variables needed
-colnames(blvu2)
-blvu2$y <- 1
-colnames(rand2)
+
 rand2$id <- 999
 rand2$dt <- 9/9/9999
+rand2$ltime <- 0:00
 rand2$kph <- 0 
 rand2$alt <- 0
 rand2$y <- 0 
 rand2$date <- 0
+rand2$month <- 0
 rand2$season <- "n"
+
 
 
 data2 <- rbind(rand2, blvu2)
 
-random1<- rand2
-blvu1 <- blvu2
-
 #remove nas from data
-data1 <- na.omit(data2)
-#cleanup 
-rm(list = ls()[! ls() %in% c("blvu1","blvu.orig", "random1", "random.orig", "data1")])
-
+data1 <- subset(data2, !is.na(data2$aspect))
 
 
 cat("
 Ran at: ");Sys.time()
 toc()
 ```
-
 Put together additional variables needed for analysis
 topography
 
@@ -176,12 +221,11 @@ topography
 ```{r}
 tic()
 
-data1a <- subset(data1, aspect>=0)
-data1 <- data1a
-rm(data1a)
+data1$flat <- fifelse(data1$aspect == -1, 1, 0)
 
- data1$north <- cos(data1$aspect*pi/180)
- data1$east <- sin(data1$aspect*pi/180)
+
+data1$north <- cos(data1$aspect*pi/180)
+data1$east <- sin(data1$aspect*pi/180)
 
 
 
@@ -235,7 +279,9 @@ data1$tpicat <- as.factor(if_else(data1$valley == 1, "valley",
 
 summary(data1$tpicat)
 
-
+#remove nlcd == 0 
+data1a <- subset(data1, data1$nlcd != 0)
+data1 <- data1a
 
 cat("
 Ran at: ");Sys.time()
@@ -267,8 +313,10 @@ tic()
 
 data1$dems <- scale(data1$dem, center = T, scale = T)
 data1$slopes <- scale(data1$slope, center = T, scale = T)
-data1$drds <- scale(data1$drd, center = T, scale = T)
-
+data1$dsrds <- scale(data1$dsrd, center = T, scale = T)
+data1$dprds <- scale(data1$dprd, center = T, scale = T)
+data1$dforests <- scale(data1$dforest, center = T, scale = T)
+data1$dsolids <- scale(data1$dsolid, center = T, scale = T)
   
 cat("
 Ran at: ");Sys.time()

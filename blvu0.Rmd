@@ -50,8 +50,11 @@ import data
 tic()
 
 #import
-blvu1<- fread("wv_blvu.csv")
+blvu1<- fread("blvu.csv")
 blvu2<- fread("new_blvu.csv")
+
+colnames(blvu1)
+colnames(blvu2)
 
 cat("
 Ran at: ");Sys.time()
