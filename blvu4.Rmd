@@ -51,7 +51,7 @@ read the data for analysis
 ```{r}
 tic()
 
-blvu1<- fread("blvu1.csv")
+blvu1<- fread("blvu1_1.csv")
 colnames(blvu1)
 
 cat("
@@ -66,12 +66,12 @@ p = perch f = fly n = not used
 ```{r}
 tic()
 
-blvu1$p <- if_else((blvu1$kph < 1 & blvu1$agl < 50),"p", 
+blvu1$p <- if_else((blvu1$kph < 1 & blvu1$agl < 50),"p",
                    if_else((blvu1$agl < -50), "n", "f"))
 
 fly1<- subset(blvu1, blvu1$p == "f")
 
-blvu1$dt2 <- strptime(blvu1$dt, format = "%m/%d/%Y %H:%M:%S",tz = "GMT")
+# blvu1$dt2 <- as.POSIXlt(blvu1$dt, format = "%m/%d/%Y %H:%M:%S",tz = "GMT")
 
 summary(fly1)
 
@@ -94,7 +94,7 @@ fly1$east2 <- fly1$east^2
 fly1$dprd2 <- fly1$dprd^2
 fly1$dsrd2 <- fly1$dsrd^2
 fly1$dsolid2 <- fly1$dsolid^2
-fly1$dforest2 <- fly1dforest^2
+fly1$dforest2 <- fly1$dforest^2
 #center and scale squared terms
 fly1$dem2s <- scale(fly1$dem2, center = T, scale = T)
 fly1$slope2s <- scale(fly1$slope2, center = T, scale = T)
@@ -160,7 +160,7 @@ Ran at: ");Sys.time()
 toc()
 ```
 
-dredge pdredge for mulit-core analysis
+dredge bdredge for mulit-core analysis (include cluster option in dredge)
 
 
 ```{r}
@@ -175,7 +175,7 @@ clusterExport(cluster,"fly1")
 clusterEvalQ(cluster, library(lme4))
 
 #run dredge
-fly.dredge <- pdredge(glmm1, rank = "AICc", cluster=cluster)
+# fly.dredge <- dredge(glmm1, cluster = cluster , rank = "AICc")
 # fly.dredge <- dredge(glmm1, rank = "AICc")
 
 #stop cluster

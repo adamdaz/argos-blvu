@@ -150,7 +150,7 @@ clusterExport(cluster,"data1")
 clusterEvalQ(cluster, library(stats))
 
 #run dredge
-data.dredge <- pdredge(glm1, rank = "AICc", cluster=cluster)
+data.dredge <- dredge(glm1, rank = "AICc", cluster=cluster)
 
 
 #stop cluster
