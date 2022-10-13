@@ -44,6 +44,9 @@ library(ggplot2)
 library(ResourceSelection)
 library(MuMIn)
 library(snow)
+library(nlme)
+library(caret)
+
 ```
 
 
@@ -130,7 +133,7 @@ Analysis of data for BLVU AGL
 ```{r}
 tic()
 
-glmm1 <- lme4::lmer (agl ~ dems + dem2s + flat*east + flat*east2 + flat*north + flat*north2 + dprds + dprd2s + dsrds + dsrd2s + dsolids + dsolid2s + dforests + dforest2s + nlcdcat + tpicat + tricat + (1|id) , data = fly1 , na.action = na.fail)
+glmm1 <- lme4::lmer (agl ~ slopes + slope2s + dems + dem2s + east + north +  dprds + dprd2s + dsrds + dsrd2s + dsolids + dsolid2s +  nlcdcat + tpicat + tricat + (1|id) , data = fly1 , na.action = na.fail, REML = F)
 
 summary(glmm1)
 
@@ -160,67 +163,79 @@ Ran at: ");Sys.time()
 toc()
 ```
 
+```{r}
+tic()
+
+glmm2 <- lme4::lmer (agl ~ dems + slopes +east + north +  dprds + dsrds + dsolids +  nlcdcat + tpicat + tricat + (1|id) , data = fly1 , na.action = na.fail, REML = F)
+
+summary(glmm2)
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+check fit of model
+
+```{r}
+tic()
+
+#residuals
+rglmm2<- residuals (glmm2, type = "pearson")
+#qqplot of residuals
+qqnorm (rglmm2)
+qqline (rglmm2)
+# predicted fit
+fglmm2 <- fitted(glmm2)
+#plot residuals vs predicted fit
+plot(fglmm2,rglmm2)
+
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+Save model and data for graphing and assessing effects
+
+```{r}
+tic()
+
+fwrite (fly1, "fly1_4.csv")
+
+saveRDS(glmm1, "flyglmm.rds")
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+
+
+
 dredge bdredge for mulit-core analysis (include cluster option in dredge)
 
 
 ```{r}
-tic()
-#set up the cluster
-cores<-6
-clusterType <- if(length(find.package("snow", quiet = TRUE))) "SOCK" else "PSOCK"
-cluster <- try(makeCluster(getOption("cl.cores", cores), type = clusterType))
-#export data to cluster
-clusterExport(cluster,"fly1")
-#explort package to cluster
-clusterEvalQ(cluster, library(lme4))
-
-#run dredge
-# fly.dredge <- dredge(glmm1, cluster = cluster , rank = "AICc")
-# fly.dredge <- dredge(glmm1, rank = "AICc")
-
-#stop cluster
-stopCluster(cluster)
-
-#write results
-fwrite(fly.dredge, "fly.dredge.csv")
-
-cat("
-Ran at: ");Sys.time()
-toc()
-```
-
-
-model average
-
-
-```{r}
-tic()
-
-mafly <- model.avg(fly.dredge)
-
-cat("
-Ran at: ");Sys.time()
-toc()
-```
-
-Look at model averaged results 
-
-```{r}
-tic()
-
-summary(mafly)
-
-cat("
-Ran at: ");Sys.time()
-toc()
-```
-
-
-
-Graph results
-
-```{r}
 # tic()
+# #set up the cluster
+# cores<-6
+# clusterType <- if(length(find.package("snow", quiet = TRUE))) "SOCK" else "PSOCK"
+# cluster <- try(makeCluster(getOption("cl.cores", cores), type = clusterType))
+# #export data to cluster
+# clusterExport(cluster,"fly1")
+# #explort package to cluster
+# clusterEvalQ(cluster, library(lme4))
+# 
+# #run dredge
+# # fly.dredge <- dredge(glmm1, cluster = cluster , rank = "AICc")
+# # fly.dredge <- dredge(glmm1, rank = "AICc")
+# 
+# #stop cluster
+# stopCluster(cluster)
+# 
+# #write results
+# fwrite(fly.dredge, "fly.dredge.csv")
 # 
 # cat("
 # Ran at: ");Sys.time()
@@ -228,12 +243,25 @@ Graph results
 ```
 
 
-
-
+model average
 
 
 ```{r}
 # tic()
+# 
+# mafly <- model.avg(fly.dredge)
+# 
+# cat("
+# Ran at: ");Sys.time()
+# toc()
+```
+
+Look at model averaged results 
+
+```{r}
+# tic()
+# 
+# summary(mafly)
 # 
 # cat("
 # Ran at: ");Sys.time()
