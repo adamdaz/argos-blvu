@@ -66,7 +66,7 @@ Analysis of data for BLVU RSF
 ```{r}
 tic()
 
-glm1 <- glm( y ~ -1 +  slopes + flat*east + flat*north + dems + tpicat + tricat + nlcdcat + dprds + dsrds + dforests + dsolids , family = binomial  , data = data1, na.action = na.fail)
+glm1 <- glm( y ~ -1 +  slopes + east + north + dems + tpicat + tricat + nlcdcat + dprds + dsrds + dsolids , family = binomial  , data = data1, na.action = na.fail)
 
 summary(glm1)
 
@@ -99,38 +99,38 @@ toc()
 ```
 
 model 2
- ```{r}
-# tic()
-# 
-# glm2 <- glm( y ~ -1 +  slopes + east + north + dems + tpicat + tricat + nlcdcat + drds , family = binomial  , data = data1, na.action = na.fail)
-# 
-# summary(glm2)
-# 
-# 
-# 
-# cat("
-# Ran at: ");Sys.time()
-# toc()
+```{r}
+ tic()
+
+ glm2 <- glm( y ~ -1 +  slopes + east + north + dems + tpicat + tricat + nlcdcat + dprds + dsrds + (1|id) , family = binomial  , data = data1, na.action = na.fail)
+
+ summary(glm2)
+
+
+
+ cat("
+ Ran at: ");Sys.time()
+ toc()
 ```
 check fit of model
 
 ```{r}
 tic()
 
-# #residuals
-# rglm2<- residuals (glm2, type = "pearson")
-# #qqplot of residuals
-# qqnorm (rglm2)
-# qqline (rglm2)
-# # predicted fit
-# fglm2 <- fitted(glm2)
-# #plot residuals vs predicted fit
-# plot(fglm2,rglm2)
-# 
-# 
-# cat("
-# Ran at: ");Sys.time()
-# toc()
+#residuals
+rglm2<- residuals (glm2, type = "pearson")
+#qqplot of residuals
+qqnorm (rglm2)
+qqline (rglm2)
+# predicted fit
+fglm2 <- fitted(glm2)
+#plot residuals vs predicted fit
+plot(fglm2,rglm2)
+
+
+cat("
+Ran at: ");Sys.time()
+toc()
 ```
 
 
@@ -138,47 +138,47 @@ dredge results
 
 
 ```{r}
-tic()
-
-#set up the cluster
-cores<-6
-clusterType <- if(length(find.package("snow", quiet = TRUE))) "SOCK" else "PSOCK"
-cluster <- try(makeCluster(getOption("cl.cores", cores), type = clusterType))
-#export data to cluster
-clusterExport(cluster,"data1")
-#explort package to cluster
-clusterEvalQ(cluster, library(stats))
-
-#run dredge
-data.dredge <- dredge(glm1, rank = "AICc", cluster=cluster)
-
-
-#stop cluster
-stopCluster(cluster)
-
-#write results
-fwrite(data.dredge, "data.dredge.csv")
-
-
-
-cat("
-Ran at: ");Sys.time()
-toc()
+# tic()
+# 
+# #set up the cluster
+# cores<-6
+# clusterType <- if(length(find.package("snow", quiet = TRUE))) "SOCK" else "PSOCK"
+# cluster <- try(makeCluster(getOption("cl.cores", cores), type = clusterType))
+# #export data to cluster
+# clusterExport(cluster,"data1")
+# #explort package to cluster
+# clusterEvalQ(cluster, library(stats))
+# 
+# #run dredge
+# data.dredge <- dredge(glm1, rank = "AICc", cluster=cluster)
+# 
+# 
+# #stop cluster
+# stopCluster(cluster)
+# 
+# #write results
+# fwrite(data.dredge, "data.dredge.csv")
+# 
+# 
+# 
+# cat("
+# Ran at: ");Sys.time()
+# toc()
 ```
 
 
 model average
 
 ```{r}
-tic()
-
-
-madredge1 <- model.avg(data.dredge)
-
-
-cat("
-Ran at: ");Sys.time()
-toc()
+# tic()
+# 
+# 
+# madredge1 <- model.avg(data.dredge)
+# 
+# 
+# cat("
+# Ran at: ");Sys.time()
+# toc()
 ```
 
 
@@ -186,22 +186,25 @@ View results of dredge
 
 
 ```{r}
-tic()
-
-summary(data.dredge)
-summary(madredge1)
-
-cat("
-Ran at: ");Sys.time()
-toc()
+# tic()
+# 
+# summary(data.dredge)
+# summary(madredge1)
+# 
+# cat("
+# Ran at: ");Sys.time()
+# toc()
 ```
 
 
-
+save model for later use
 
 
 ```{r}
 tic()
+
+saveRDS (glm1, "glm1.rds")
+saveRDS (glm2, "glm2.rds")
 
 cat("
 Ran at: ");Sys.time()

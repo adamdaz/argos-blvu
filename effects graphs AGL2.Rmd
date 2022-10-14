@@ -1,0 +1,812 @@
+---
+title: "effects graphs AGL analysis"
+author: "Adam Duerr"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+clear environment 
+```{r}
+# rm(list = ls())
+
+```
+
+
+
+libraries
+```{r}
+library(usethis) #git stuff
+library(renv) #versioning tools
+library(tictoc) #tracking time
+library(data.table) #allows multi-core processing for reading/writing tables = fast!
+library(lme4)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ResourceSelection)
+library(MuMIn)
+library(boot)
+library(GLMMadaptive)
+```
+
+Read data
+
+```{r}
+tic()
+
+blvu1 <- fread("M:/R/argos-blvu/blvu1_1.csv")
+
+fly1 <- fread("fly1_4.csv")
+
+glmm1 <- readRDS("flyglmm.rds")
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+
+plots for Flight AGL
+
+
+get relevant summary stats
+```{r}
+tic()
+
+c <- c("east","north","dem", "dsolid", "dsrd", "dprd", "dforest", "slope")
+
+means.fly1 <- colMeans(fly1[,c("east","north","dem", "dsolid", "dsrd", "dprd", "dforest", "slope")] )
+
+sd.fly1 <- sapply(fly1[,c("east","north","dem", "dsolid", "dsrd", "dprd", "dforest", "slope")], sd)
+
+min.fly1 <- sapply(fly1[,c("east","north","dem", "dsolid", "dsrd", "dprd", "dforest", "slope")], min)
+
+max.fly1 <- sapply(fly1[,c("east","north","dem", "dsolid", "dsrd", "dprd", "dforest", "slope")], max)
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+
+correlation matrix for model glmm1
+```{r}
+tic()
+
+fcor <- cor(fly1[,c("slopes" , "slope2s" , "dems" , "dem2s" , "east" , "north" ,  "dprds" , "dprd2s" , "dsrds" , "dsrd2s" , "dsolids" , "dsolid2s" , "dforests" , "dforest2s")])
+
+fwrite(fcor,"M:/R/argos-blvu/cor_agl.csv")
+
+cat("
+Ran at: ");Sys.time()
+toc()
+
+```
+
+
+
+setup data for plots
+```{r}
+tic()
+
+# save coefficients to vector (df)
+
+fcoef <- as.data.frame(coeffs(glmm1))
+
+#condidence limits - takes a long time
+#fci <- confint(glmm1)
+#write.csv(fci, "fci2.csv")
+
+fci1 <- read.csv("fci2.csv")
+
+fci <- fci1[,2:3]
+rownames(fci) <- fci1[,1]
+colnames(fci) <- c("2.5 %", "97.5 %")
+
+fci 
+
+cat("
+Ran at: ");Sys.time()
+toc()
+
+```
+
+Set up theme for plots
+```{r}
+thm <- theme_classic(base_size = 10, base_family = "serif") + 
+  theme(strip.background = element_blank()) + 
+  theme(axis.text = element_text( size = 9 , color = "black"), 
+        axis.title = element_text( size = 10, color = "black"),
+        strip.text = element_text(size = 10, color = "black"))
+
+dev.new(width = 3, height = 3, unit = "in")
+ 
+cat("last ran"); timestamp()
+```
+
+
+
+
+
+
+
+east
+```{r}
+tic()
+#create data frame starting with east
+feast <- seq(min.fly1["east"], max.fly1["east"], length.out = 500 )
+feast <- as.data.frame(feast)
+colnames(feast) <- c("east")
+
+feast$mean <- (fcoef["(Intercept",] + 
+  mean(blvu1$slopes)*fcoef["slopes",] + mean(blvu1$slopes^2)*fcoef["slope2s",] +
+  feast$east*fcoef["east",] +
+  mean(blvu1$north)*fcoef["north",] +
+  mean(blvu1$dems)*fcoef["dems",] +  mean(blvu1$dems^2)*fcoef["dem2s",] + 
+  mean(blvu1$dprds)*fcoef["dprds",] +  mean(blvu1$dprds^2)*fcoef["dprd2s",] + 
+  mean(blvu1$dsrds)*fcoef["dsrds",] + mean(blvu1$dsrds^2)*fcoef["dsrd2s",] + 
+  mean(blvu1$dsolids)*fcoef["dsolids",] +  mean(blvu1$dsolids^2)*fcoef["dsolid2s",] + 
+  fcoef["tpicatvalley",] + 
+  fcoef["tricatsmooth",] +
+  fcoef["nlcdcatforest",] 
+    )
+
+feast$lower <- (fci["(Intercept)", "2.5 %"] +
+  mean(blvu1$slopes)*fci["slopes","2.5 %"] +  mean(blvu1$slopes^2)*fci["slope2s","2.5 %"]+
+  (feast$east)*fci["east","2.5 %"] + 
+  mean(blvu1$north)*fci["north","2.5 %"] +
+  mean(blvu1$dems)*fci["dems","2.5 %"] + mean(blvu1$dems^2)*fci["dem2s","2.5 %"] + 
+  mean(blvu1$dprds)*fci["dprds","2.5 %"] + mean(blvu1$dprds^2)*fci["dprd2s","2.5 %"] + 
+  mean(blvu1$dsrds)*fci["dsrds","2.5 %"] + mean(blvu1$dsrds^2)*fci["dsrd2s","2.5 %"] + 
+  mean(blvu1$dsolids)*fci["dsolids","2.5 %"] + mean(blvu1$dsolids^2)*fci["dsolid2s","2.5 %"] + 
+  fci["tpicatvalley","2.5 %"] + 
+  fci["tricatsmooth","2.5 %"] +
+  fci["nlcdcatforest","2.5 %"] 
+  )  
+  
+
+feast$upper <- (fci["(Intercept)", "97.5 %"] +
+  mean(blvu1$slopes)*fci["slopes","97.5 %"]+mean(blvu1$slopes^2)*fci["slope2s","97.5 %"]+
+  (feast$east)*fci["east","97.5 %"] + 
+  mean(blvu1$north)*fci["north","97.5 %"] +
+  mean(blvu1$dems)*fci["dems","97.5 %"] + mean(blvu1$dems^2)*fci["dem2s","97.5 %"] + 
+  mean(blvu1$dprds)*fci["dprds","97.5 %"] + mean(blvu1$dprds^2)*fci["dprd2s","97.5 %"] + 
+  mean(blvu1$dsrds)*fci["dsrds","97.5 %"] + mean(blvu1$dsrds^2)*fci["dsrd2s","97.5 %"] + 
+  mean(blvu1$dsolids)*fci["dsolids","97.5 %"] + mean(blvu1$dsolids^2)*fci["dsolid2s","97.5 %"] + 
+  fci["tpicatvalley","97.5 %"] + 
+  fci["tricatsmooth","97.5 %"] +
+  fci["nlcdcatforest","97.5 %"] 
+    )
+
+
+ggplot(data = feast, aes(x = east, y = mean)) + 
+  thm +
+geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, color = "grey60") +
+geom_point (color = "black", size = 0.5) +   
+ylab("Flight altitude above ground level (m)") + xlab("Eastness") +
+scale_y_continuous( expand = c(0,0),limits = c(0, 750))
+
+ggsave("M:/CSG Google Drive/ARGOS BLVU/feast.png", width = 3, height = 3, dpi = 600)
+
+cat("
+Ran at: ");Sys.time()
+toc()
+
+```
+
+north
+```{r}
+tic()
+#create data frame starting with north
+fnorth <- seq(min.fly1["north"], max.fly1["north"], length.out = 500 )
+fnorth <- as.data.frame(fnorth)
+colnames(fnorth) <- c("north")
+
+fnorth$mean <- (fcoef["(Intercept",] + 
+  mean(blvu1$slopes)*fcoef["slopes",] + mean(blvu1$slopes^2)*fcoef["slope2s",] +
+  mean(blvu1$east)*fcoef["east",] +
+  (fnorth$north)*fcoef["north",] +
+  mean(blvu1$dems)*fcoef["dems",] +  mean(blvu1$dems^2)*fcoef["dem2s",] + 
+  mean(blvu1$dprds)*fcoef["dprds",] +  mean(blvu1$dprds^2)*fcoef["dprd2s",] + 
+  mean(blvu1$dsrds)*fcoef["dsrds",] + mean(blvu1$dsrds^2)*fcoef["dsrd2s",] + 
+  mean(blvu1$dsolids)*fcoef["dsolids",] +  mean(blvu1$dsolids^2)*fcoef["dsolid2s",] + 
+  fcoef["tpicatvalley",] + 
+  fcoef["tricatsmooth",] +
+  fcoef["nlcdcatforest",] 
+    )
+
+fnorth$lower <- (fci["(Intercept)", "2.5 %"] +
+ mean(blvu1$slopes)*fci["slopes","2.5 %"] +  mean(blvu1$slopes^2)*fci["slope2s","2.5 %"]+
+  mean(blvu1$east)*fci["east","2.5 %"] + 
+  (fnorth$north)*fci["north","2.5 %"] +
+  mean(blvu1$dems)*fci["dems","2.5 %"] + mean(blvu1$dems^2)*fci["dem2s","2.5 %"] + 
+  mean(blvu1$dprds)*fci["dprds","2.5 %"] + mean(blvu1$dprds^2)*fci["dprd2s","2.5 %"] + 
+  mean(blvu1$dsrds)*fci["dsrds","2.5 %"] + mean(blvu1$dsrds^2)*fci["dsrd2s","2.5 %"] + 
+  mean(blvu1$dsolids)*fci["dsolids","2.5 %"] + mean(blvu1$dsolids^2)*fci["dsolid2s","2.5 %"] + 
+  fci["tpicatvalley","2.5 %"] + 
+  fci["tricatsmooth","2.5 %"] +
+  fci["nlcdcatforest","2.5 %"] 
+    )
+  
+
+fnorth$upper <- (fci["(Intercept)", "97.5 %"] +
+  mean(blvu1$slopes)*fci["slopes","97.5 %"]+mean(blvu1$slopes^2)*fci["slope2s","97.5 %"]+
+  mean(blvu1$east)*fci["east","97.5 %"] + 
+  (fnorth$north)*fci["north","97.5 %"] +
+  mean(blvu1$dems)*fci["dems","97.5 %"] + mean(blvu1$dems^2)*fci["dem2s","97.5 %"] + 
+  mean(blvu1$dprds)*fci["dprds","97.5 %"] + mean(blvu1$dprds^2)*fci["dprd2s","97.5 %"] + 
+  mean(blvu1$dsrds)*fci["dsrds","97.5 %"] + mean(blvu1$dsrds^2)*fci["dsrd2s","97.5 %"] + 
+  mean(blvu1$dsolids)*fci["dsolids","97.5 %"] + mean(blvu1$dsolids^2)*fci["dsolid2s","97.5 %"] + 
+  fci["tpicatvalley","97.5 %"] + 
+  fci["tricatsmooth","97.5 %"] +
+  fci["nlcdcatforest","97.5 %"] 
+    )
+
+
+ggplot(data = fnorth, aes(x = north, y = mean)) + 
+  thm +
+geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, color = "grey60") +
+geom_point (color = "black", size = 0.5) +   
+ylab("Flight altitude above ground level (m)") + xlab("Northness")+
+scale_y_continuous( expand = c(0,0),limits = c(0, 750))
+
+ggsave("M:/CSG Google Drive/ARGOS BLVU/fnorth.png", width = 3, height = 3, dpi = 600)
+
+cat("
+Ran at: ");Sys.time()
+toc()
+
+```
+
+slope 
+```{r}
+tic()
+#create data frame starting with east
+fslope <- seq(min.fly1["slope"], max.fly1["slope"], length.out = 500 )
+fslope <- as.data.frame(fslope)
+colnames(fslope) <- c("slope")
+fslope$scaled <- (fslope$slope - means.fly1["slope"])/sd.fly1["slope"]
+
+fslope$mean <- (fcoef["(Intercept",] + 
+  (fslope$scaled)*fcoef["slopes",] + (fslope$scaled^2)*fcoef["slope2s",] +
+  mean(blvu1$east)*fcoef["east",] +
+  mean(blvu1$north)*fcoef["north",] +
+  mean(blvu1$dems)*fcoef["dems",] +  mean(blvu1$dems^2)*fcoef["dem2s",] + 
+  mean(blvu1$dprds)*fcoef["dprds",] +  mean(blvu1$dprds^2)*fcoef["dprd2s",] + 
+  mean(blvu1$dsrds)*fcoef["dsrds",] + mean(blvu1$dsrds^2)*fcoef["dsrd2s",] + 
+  mean(blvu1$dsolids)*fcoef["dsolids",] +  mean(blvu1$dsolids^2)*fcoef["dsolid2s",] + 
+  fcoef["tpicatvalley",] + 
+  fcoef["tricatsmooth",] +
+  fcoef["nlcdcatforest",] 
+    )
+
+fslope$lower <- (fci["(Intercept)", "2.5 %"] +
+  (fslope$scaled)*fci["slopes","2.5 %"] +  (fslope$scaled^2)*fci["slope2s","2.5 %"]+
+  mean(blvu1$east)*fci["east","2.5 %"] + 
+  mean(blvu1$north)*fci["north","2.5 %"] +
+  mean(blvu1$dems)*fci["dems","2.5 %"] + mean(blvu1$dems^2)*fci["dem2s","2.5 %"] + 
+  mean(blvu1$dprds)*fci["dprds","2.5 %"] + mean(blvu1$dprds^2)*fci["dprd2s","2.5 %"] + 
+  mean(blvu1$dsrds)*fci["dsrds","2.5 %"] + mean(blvu1$dsrds^2)*fci["dsrd2s","2.5 %"] + 
+  mean(blvu1$dsolids)*fci["dsolids","2.5 %"] + mean(blvu1$dsolids^2)*fci["dsolid2s","2.5 %"] + 
+  fci["tpicatvalley","2.5 %"] + 
+  fci["tricatsmooth","2.5 %"] +
+  fci["nlcdcatforest","2.5 %"] 
+    )
+  
+
+fslope$upper <- (fci["(Intercept)", "97.5 %"] +
+  (fslope$scaled)*fci["slopes","97.5 %"]+ (fslope$scaled^2)*fci["slope2s","97.5 %"]+
+  mean(blvu1$east)*fci["east","97.5 %"] + 
+  mean(blvu1$north)*fci["north","97.5 %"] +
+  mean(blvu1$dems)*fci["dems","97.5 %"] + mean(blvu1$dems^2)*fci["dem2s","97.5 %"] + 
+  mean(blvu1$dprds)*fci["dprds","97.5 %"] + mean(blvu1$dprds^2)*fci["dprd2s","97.5 %"] + 
+  mean(blvu1$dsrds)*fci["dsrds","97.5 %"] + mean(blvu1$dsrds^2)*fci["dsrd2s","97.5 %"] + 
+  mean(blvu1$dsolids)*fci["dsolids","97.5 %"] + mean(blvu1$dsolids^2)*fci["dsolid2s","97.5 %"] + 
+  fci["tpicatvalley","97.5 %"] + 
+  fci["tricatsmooth","97.5 %"] +
+  fci["nlcdcatforest","97.5 %"] 
+    )
+
+
+ggplot(data = fslope, aes(x = slope, y = mean)) + 
+  thm +
+geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, color = "grey60") +
+geom_point (color = "black", size = 0.5) +   
+ylab("Flight altitude above ground level (m)") + xlab("Slope (%)")+
+scale_y_continuous( expand = c(0,0),limits = c(0, 750)) +
+scale_x_continuous(expand = c(0,0), limits = c(min.fly1["slope"], max.fly1["slope"]))
+
+ggsave("M:/CSG Google Drive/ARGOS BLVU/fslope.png", width = 3, height = 3, dpi = 600)
+
+cat("
+Ran at: ");Sys.time()
+toc()
+
+```
+
+dem
+```{r}
+tic()
+#create data frame starting with east
+fdem <- seq(min.fly1["dem"], max.fly1["dem"], length.out = 500 )
+fdem <- as.data.frame(fdem)
+colnames(fdem) <- c("dem")
+fdem$scaled <- (fdem$dem - means.fly1["dem"])/sd.fly1["dem"]
+
+fdem$mean <- (fcoef["(Intercept",] + 
+  mean(blvu1$slopes)*fcoef["slopes",] + mean(blvu1$slopes^2)*fcoef["slope2s",] +
+  mean(blvu1$east)*fcoef["east",] +
+  mean(blvu1$north)*fcoef["north",] +
+  fdem$scaled*fcoef["dems",] +  (fdem$scaled^2)*fcoef["dem2s",] + 
+  mean(blvu1$dprds)*fcoef["dprds",] +  mean(blvu1$dprds^2)*fcoef["dprd2s",] + 
+  mean(blvu1$dsrds)*fcoef["dsrds",] + mean(blvu1$dsrds^2)*fcoef["dsrd2s",] + 
+  mean(blvu1$dsolids)*fcoef["dsolids",] +  mean(blvu1$dsolids^2)*fcoef["dsolid2s",] + 
+  fcoef["tpicatvalley",] + 
+  fcoef["tricatsmooth",] +
+  fcoef["nlcdcatforest",] 
+    )
+
+fdem$lower <- (fci["(Intercept)", "2.5 %"] +
+  mean(blvu1$slopes)*fci["slopes","2.5 %"] +  mean(blvu1$slopes^2)*fci["slope2s","2.5 %"]+
+  mean(blvu1$east)*fci["east","2.5 %"] + 
+  mean(blvu1$north)*fci["north","2.5 %"] +
+  fdem$scaled*fci["dems","2.5 %"] +  (fdem$scaled^2)*fci["dem2s","2.5 %"] + 
+  mean(blvu1$dprds)*fci["dprds","2.5 %"] + mean(blvu1$dprds^2)*fci["dprd2s","2.5 %"] + 
+  mean(blvu1$dsrds)*fci["dsrds","2.5 %"] + mean(blvu1$dsrds^2)*fci["dsrd2s","2.5 %"] + 
+  mean(blvu1$dsolids)*fci["dsolids","2.5 %"] + mean(blvu1$dsolids^2)*fci["dsolid2s","2.5 %"] + 
+  fci["tpicatvalley","2.5 %"] + 
+  fci["tricatsmooth","2.5 %"] +
+  fci["nlcdcatforest","2.5 %"] 
+    )
+  
+
+fdem$upper <- (fci["(Intercept)", "97.5 %"] +
+  mean(blvu1$slopes)*fci["slopes","97.5 %"]+mean(blvu1$slopes^2)*fci["slope2s","97.5 %"]+
+  mean(blvu1$east)*fci["east","97.5 %"] + 
+  mean(blvu1$north)*fci["north","97.5 %"] +
+  fdem$scaled*fci["dems","97.5 %"] +  (fdem$scaled^2)*fci["dem2s","97.5 %"] + 
+  mean(blvu1$dprds)*fci["dprds","97.5 %"] + mean(blvu1$dprds^2)*fci["dprd2s","97.5 %"] + 
+  mean(blvu1$dsrds)*fci["dsrds","97.5 %"] + mean(blvu1$dsrds^2)*fci["dsrd2s","97.5 %"] + 
+  mean(blvu1$dsolids)*fci["dsolids","97.5 %"] + mean(blvu1$dsolids^2)*fci["dsolid2s","97.5 %"] + 
+  fci["tpicatvalley","97.5 %"] + 
+  fci["tricatsmooth","97.5 %"] +
+  fci["nlcdcatforest","97.5 %"] 
+    )
+
+
+ggplot(data = fdem, aes(x = dem, y = mean)) + 
+  thm +
+geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, color = "grey60") +
+geom_point (color = "black", size = 0.5) +   
+ylab("Flight altitude above ground level (m)") + xlab("Elevation (m)")+
+scale_y_continuous( expand = c(0,0),limits = c(0, 750))
+
+ggsave("M:/CSG Google Drive/ARGOS BLVU/fdem.png", width = 3, height = 3, dpi = 600)
+
+cat("
+Ran at: ");Sys.time()
+toc()
+
+```
+
+dprds
+```{r}
+tic()
+#create data frame starting with east
+fdprd <- seq(min.fly1["dprd"], max.fly1["dprd"], length.out = 500 )
+fdprd <- as.data.frame(fdprd)
+colnames(fdprd) <- c("dprd")
+fdprd$scaled <- (fdprd$dprd - means.fly1["dprd"])/sd.fly1["dprd"]
+
+fdprd$mean <- (fcoef["(Intercept",] + 
+  mean(blvu1$slopes)*fcoef["slopes",] + mean(blvu1$slopes^2)*fcoef["slope2s",] +
+  mean(blvu1$east)*fcoef["east",] +
+  mean(blvu1$north)*fcoef["north",] +
+  mean(blvu1$dems)*fcoef["dems",] +  mean(blvu1$dems^2)*fcoef["dem2s",] + 
+  (fdprd$scaled)*fcoef["dprds",] +  (fdprd$scaled^2)*fcoef["dprd2s",] + 
+  mean(blvu1$dsrds)*fcoef["dsrds",] + mean(blvu1$dsrds^2)*fcoef["dsrd2s",] + 
+  mean(blvu1$dsolids)*fcoef["dsolids",] +  mean(blvu1$dsolids^2)*fcoef["dsolid2s",] + 
+  fcoef["tpicatvalley",] + 
+  fcoef["tricatsmooth",] +
+  fcoef["nlcdcatforest",] 
+    )
+
+fdprd$lower <- (fci["(Intercept)", "2.5 %"] +
+  mean(blvu1$slopes)*fci["slopes","2.5 %"] +  mean(blvu1$slopes^2)*fci["slope2s","2.5 %"]+
+  mean(blvu1$east)*fci["east","2.5 %"] + 
+  mean(blvu1$north)*fci["north","2.5 %"] +
+  mean(blvu1$dems)*fci["dems","2.5 %"] + mean(blvu1$dems^2)*fci["dem2s","2.5 %"] + 
+  (fdprd$scaled)*fci["dprds","2.5 %"] + (fdprd$scaled^2)*fci["dprd2s","2.5 %"] + 
+  mean(blvu1$dsrds)*fci["dsrds","2.5 %"] + mean(blvu1$dsrds^2)*fci["dsrd2s","2.5 %"] + 
+  mean(blvu1$dsolids)*fci["dsolids","2.5 %"] + mean(blvu1$dsolids^2)*fci["dsolid2s","2.5 %"] + 
+  fci["tpicatvalley","2.5 %"] + 
+  fci["tricatsmooth","2.5 %"] +
+  fci["nlcdcatforest","2.5 %"] 
+    )
+  
+
+fdprd$upper <- (fci["(Intercept)", "97.5 %"] +
+  mean(blvu1$slopes)*fci["slopes","97.5 %"]+mean(blvu1$slopes^2)*fci["slope2s","97.5 %"]+
+  mean(blvu1$east)*fci["east","97.5 %"] + 
+  mean(blvu1$north)*fci["north","97.5 %"] +
+  mean(blvu1$dems)*fci["dems","97.5 %"] + mean(blvu1$dems^2)*fci["dem2s","97.5 %"] + 
+  (fdprd$scaled)*fci["dprds","97.5 %"] + (fdprd$scaled^2)*fci["dprd2s","97.5 %"] + 
+  mean(blvu1$dsrds)*fci["dsrds","97.5 %"] + mean(blvu1$dsrds^2)*fci["dsrd2s","97.5 %"] + 
+  mean(blvu1$dsolids)*fci["dsolids","97.5 %"] + mean(blvu1$dsolids^2)*fci["dsolid2s","97.5 %"] + 
+  fci["tpicatvalley","97.5 %"] + 
+  fci["tricatsmooth","97.5 %"] +
+  fci["nlcdcatforest","97.5 %"] 
+    )
+
+
+ggplot(data = fdprd, aes(x = dprd, y = mean)) + 
+  thm +
+geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, color = "grey60") +
+geom_point (color = "black", size = 0.5) +   
+ylab("Flight altitude above ground level (m)") + xlab("Distance to primary roads (m)")+
+scale_y_continuous( expand = c(0,0),limits = c(0, 750))+
+scale_x_continuous(expand = c(0,0), limits = c(min.fly1["dprd"], max.fly1["dprd"]))
+
+ggsave("M:/CSG Google Drive/ARGOS BLVU/fdprd.png", width = 3, height = 3, dpi = 600)
+
+cat("
+Ran at: ");Sys.time()
+toc()
+
+```
+
+
+
+dsrds
+```{r}
+tic()
+#create data frame starting with east
+fdsrd <- seq(min.fly1["dsrd"], max.fly1["dsrd"], length.out = 500 )
+fdsrd <- as.data.frame(fdsrd)
+colnames(fdsrd) <- c("dsrd")
+fdsrd$scaled <- (fdsrd$dsrd - means.fly1["dsrd"])/sd.fly1["dsrd"]
+
+fdsrd$mean <- (fcoef["(Intercept",] + 
+  mean(blvu1$slopes)*fcoef["slopes",] + mean(blvu1$slopes^2)*fcoef["slope2s",] +
+  mean(blvu1$east)*fcoef["east",] +
+  mean(blvu1$north)*fcoef["north",] +
+  mean(blvu1$dems)*fcoef["dems",] +  mean(blvu1$dems^2)*fcoef["dem2s",] + 
+  (fdsrd$scaled)*fcoef["dsrds",] +  (fdsrd$scaled^2)*fcoef["dsrd2s",] + 
+  mean(blvu1$dprds)*fcoef["dprds",] + mean(blvu1$dprds^2)*fcoef["dprd2s",] + 
+  mean(blvu1$dsolids)*fcoef["dsolids",] +  mean(blvu1$dsolids^2)*fcoef["dsolid2s",] + 
+  fcoef["tpicatvalley",] + 
+  fcoef["tricatsmooth",] +
+  fcoef["nlcdcatforest",] 
+    )
+
+fdsrd$lower <- (fci["(Intercept)", "2.5 %"] +
+  mean(blvu1$slopes)*fci["slopes","2.5 %"] +  mean(blvu1$slopes^2)*fci["slope2s","2.5 %"]+
+  mean(blvu1$east)*fci["east","2.5 %"] + 
+  mean(blvu1$north)*fci["north","2.5 %"] +
+  mean(blvu1$dems)*fci["dems","2.5 %"] + mean(blvu1$dems^2)*fci["dem2s","2.5 %"] + 
+  (fdsrd$scaled)*fci["dsrds","2.5 %"] + (fdsrd$scaled^2)*fci["dsrd2s","2.5 %"] + 
+  mean(blvu1$dprds)*fci["dprds","2.5 %"] + mean(blvu1$dprds^2)*fci["dprd2s","2.5 %"] + 
+  mean(blvu1$dsolids)*fci["dsolids","2.5 %"] + mean(blvu1$dsolids^2)*fci["dsolid2s","2.5 %"] + 
+  fci["tpicatvalley","2.5 %"] + 
+  fci["tricatsmooth","2.5 %"] +
+  fci["nlcdcatforest","2.5 %"] 
+    )
+  
+
+fdsrd$upper <- (fci["(Intercept)", "97.5 %"] +
+  mean(blvu1$slopes)*fci["slopes","97.5 %"]+mean(blvu1$slopes^2)*fci["slope2s","97.5 %"]+
+  mean(blvu1$east)*fci["east","97.5 %"] + 
+  mean(blvu1$north)*fci["north","97.5 %"] +
+  mean(blvu1$dems)*fci["dems","97.5 %"] + mean(blvu1$dems^2)*fci["dem2s","97.5 %"] + 
+  (fdsrd$scaled)*fci["dsrds","97.5 %"] + (fdsrd$scaled^2)*fci["dsrd2s","97.5 %"] + 
+  mean(blvu1$dprds)*fci["dprds","97.5 %"] + mean(blvu1$dprds^2)*fci["dprd2s","97.5 %"] + 
+  mean(blvu1$dsolids)*fci["dsolids","97.5 %"] + mean(blvu1$dsolids^2)*fci["dsolid2s","97.5 %"] + 
+  fci["tpicatvalley","97.5 %"] + 
+  fci["tricatsmooth","97.5 %"] +
+  fci["nlcdcatforest","97.5 %"] 
+    )
+
+
+ggplot(data = fdsrd, aes(x = dsrd, y = mean)) + 
+  thm +
+geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, color = "grey60") +
+geom_point (color = "black", size = 0.5) +   
+ylab("Flight altitude above ground level (m)") + xlab("Distance to secondary roads (m)")+
+scale_y_continuous( expand = c(0,0),limits = c(0, 750))+
+scale_x_continuous(expand = c(0,0), limits = c(min.fly1["dsrd"], max.fly1["dsrd"]))
+
+ggsave("M:/CSG Google Drive/ARGOS BLVU/fdsrd.png", width = 3, height = 3, dpi = 600)
+
+cat("
+Ran at: ");Sys.time()
+toc()
+
+```
+
+
+
+
+dsolids
+```{r}
+tic()
+#create data frame starting with east
+fdsolid <- seq(min.fly1["dsolid"], max.fly1["dsolid"], length.out = 500 )
+fdsolid <- as.data.frame(fdsolid)
+colnames(fdsolid) <- c("dsolid")
+fdsolid$scaled <- (fdsolid$dsolid - means.fly1["dsolid"])/sd.fly1["dsolid"]
+
+fdsolid$mean <- (fcoef["(Intercept",] + 
+  mean(blvu1$slopes)*fcoef["slopes",] + mean(blvu1$slopes^2)*fcoef["slope2s",] +
+  mean(blvu1$east)*fcoef["east",] +
+  mean(blvu1$north)*fcoef["north",] +
+  mean(blvu1$dems)*fcoef["dems",] +  mean(blvu1$dems^2)*fcoef["dem2s",] + 
+  (fdsolid$scaled)*fcoef["dsolids",] +  (fdsolid$scaled^2)*fcoef["dsolid2s",] + 
+  mean(blvu1$dsrds)*fcoef["dsrds",] + mean(blvu1$dsrds^2)*fcoef["dsrd2s",] + 
+  mean(blvu1$dsolids)*fcoef["dsolids",] +  mean(blvu1$dsolids^2)*fcoef["dsolid2s",] + 
+  fcoef["tpicatvalley",] + 
+  fcoef["tricatsmooth",] +
+  fcoef["nlcdcatforest",] 
+    )
+
+fdsolid$lower <- (fci["(Intercept)", "2.5 %"] +
+  mean(blvu1$slopes)*fci["slopes","2.5 %"] +  mean(blvu1$slopes^2)*fci["slope2s","2.5 %"]+
+  mean(blvu1$east)*fci["east","2.5 %"] + 
+  mean(blvu1$north)*fci["north","2.5 %"] +
+  mean(blvu1$dems)*fci["dems","2.5 %"] + mean(blvu1$dems^2)*fci["dem2s","2.5 %"] + 
+  (fdsolid$scaled)*fci["dsolids","2.5 %"] + (fdsolid$scaled^2)*fci["dsolid2s","2.5 %"] + 
+  mean(blvu1$dsrds)*fci["dsrds","2.5 %"] + mean(blvu1$dsrds^2)*fci["dsrd2s","2.5 %"] + 
+  mean(blvu1$dprds)*fci["dprds","2.5 %"] + mean(blvu1$dprds^2)*fci["dprd2s","2.5 %"] + 
+  fci["tpicatvalley","2.5 %"] + 
+  fci["tricatsmooth","2.5 %"] +
+  fci["nlcdcatforest","2.5 %"] 
+    )
+  
+
+fdsolid$upper <- (fci["(Intercept)", "97.5 %"] +
+  mean(blvu1$slopes)*fci["slopes","97.5 %"]+mean(blvu1$slopes^2)*fci["slope2s","97.5 %"]+
+  mean(blvu1$east)*fci["east","97.5 %"] + 
+  mean(blvu1$north)*fci["north","97.5 %"] +
+  mean(blvu1$dems)*fci["dems","97.5 %"] + mean(blvu1$dems^2)*fci["dem2s","97.5 %"] + 
+  (fdsolid$scaled)*fci["dsolids","97.5 %"] + (fdsolid$scaled^2)*fci["dsolid2s","97.5 %"] + 
+  mean(blvu1$dsrds)*fci["dsrds","97.5 %"] + mean(blvu1$dsrds^2)*fci["dsrd2s","97.5 %"] + 
+  mean(blvu1$dprds)*fci["dprds","97.5 %"] + mean(blvu1$dprds^2)*fci["dprds","97.5 %"] + 
+  fci["tpicatvalley","97.5 %"] + 
+  fci["tricatsmooth","97.5 %"] +
+  fci["nlcdcatforest","97.5 %"] 
+    )
+
+
+ggplot(data = fdsolid, aes(x = dsolid, y = mean)) + 
+  thm +
+geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, color = "grey60") +
+geom_point (color = "black", size = 0.5) +   
+ylab("Flight altitude above ground level (m)") + xlab("Distance to solid waste facilities (m)")+
+scale_y_continuous( expand = c(0,0),limits = c(0, 750))+
+scale_x_continuous(expand = c(0,0), limits = c(min.fly1["dsolid"], max.fly1["dsolid"]))
+
+ggsave("M:/CSG Google Drive/ARGOS BLVU/fsolid.png", width = 3, height = 3, dpi = 600)
+
+cat("
+Ran at: ");Sys.time()
+toc()
+
+```
+
+
+
+tpicat
+```{r}
+tic()
+#create data frame starting with east
+ftpi <- c("Gentle slope","Valley","Steep slope", "Ridge")
+ftpi <- as.data.frame(ftpi)
+colnames(ftpi) <- c("tpi")
+ftpi$coef <- c(0, fcoef["tpicatvalley",], fcoef["tpicatsteep",], fcoef["tpicatridge",])
+ftpi$lcl <- c(0, fci["tpicatvalley", "2.5 %"],  fci["tpicatsteep", "2.5 %"], fci["tpicatridge", "2.5 %"])
+ftpi$ucl <- c(0, fci["tpicatvalley", "97.5 %"], fci["tpicatsteep", "97.5 %"], fci["tpicatridge", "97.5 %"])
+
+
+ftpi$mean <- (fcoef["(Intercept",] + 
+  mean(blvu1$slopes)*fcoef["slopes",] + mean(blvu1$slopes^2)*fcoef["slope2s",] +
+  mean(blvu1$east)*fcoef["east",] +
+  mean(blvu1$north)*fcoef["north",] +
+  mean(blvu1$dems)*fcoef["dems",] +  mean(blvu1$dems^2)*fcoef["dem2s",] + 
+  mean(blvu1$dprds)*fcoef["dprds",] +  mean(blvu1$dprds^2)*fcoef["dprd2s",] + 
+  mean(blvu1$dsrds)*fcoef["dsrds",] + mean(blvu1$dsrds^2)*fcoef["dsrd2s",] + 
+  mean(blvu1$dsolids)*fcoef["dsolids",] +  mean(blvu1$dsolids^2)*fcoef["dsolid2s",] + 
+  ftpi$coef +
+  fcoef["tricatsmooth",] +
+  fcoef["nlcdcatforest",] 
+    )
+
+ftpi$lower <- (fci["(Intercept)", "2.5 %"] +
+  mean(blvu1$slopes)*fci["slopes","2.5 %"] +  mean(blvu1$slopes^2)*fci["slope2s","2.5 %"]+
+  mean(blvu1$east)*fci["east","2.5 %"] + 
+  mean(blvu1$north)*fci["north","2.5 %"] +
+  mean(blvu1$dems)*fci["dems","2.5 %"] + mean(blvu1$dems^2)*fci["dem2s","2.5 %"] + 
+  mean(blvu1$dprds)*fci["dprds","2.5 %"] + mean(blvu1$dprds^2)*fci["dprd2s","2.5 %"] + 
+  mean(blvu1$dsrds)*fci["dsrds","2.5 %"] + mean(blvu1$dsrds^2)*fci["dsrd2s","2.5 %"] + 
+  mean(blvu1$dsolids)*fci["dsolids","2.5 %"] + mean(blvu1$dsolids^2)*fci["dsolid2s","2.5 %"] + 
+  ftpi$lcl + 
+  fci["tricatsmooth","2.5 %"] +
+  fci["nlcdcatforest","2.5 %"] 
+    )
+  
+
+ftpi$upper <- (fci["(Intercept)", "97.5 %"] +
+  mean(blvu1$slopes)*fci["slopes","97.5 %"]+mean(blvu1$slopes^2)*fci["slope2s","97.5 %"]+
+  mean(blvu1$east)*fci["east","97.5 %"] + 
+  mean(blvu1$north)*fci["north","97.5 %"] +
+  mean(blvu1$dems)*fci["dems","97.5 %"] + mean(blvu1$dems^2)*fci["dem2s","97.5 %"] + 
+  mean(blvu1$dprds)*fci["dprds","97.5 %"] + mean(blvu1$dprds^2)*fci["dprd2s","97.5 %"] + 
+  mean(blvu1$dsrds)*fci["dsrds","97.5 %"] + mean(blvu1$dsrds^2)*fci["dsrd2s","97.5 %"] + 
+  mean(blvu1$dsolids)*fci["dsolids","97.5 %"] + mean(blvu1$dsolids^2)*fci["dsolid2s","97.5 %"] + 
+ ftpi$ucl + 
+  fci["tricatsmooth","97.5 %"] +
+  fci["nlcdcatforest","97.5 %"] 
+    )
+
+
+ggplot(data = ftpi, aes(x = tpi, y = mean)) + 
+  thm +
+geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, color = "grey60") +
+geom_point (color = "black", size = 0.5) +   
+ylab("Flight altitude above ground level (m)") + xlab("Topographic position")+
+scale_y_continuous( expand = c(0,0),limits = c(0, 750))+
+scale_x_discrete(limits = c("Valley", "Gentle slope","Steep slope", "Ridge"), labels = c("Valley", "Gentle slope", "Steep slope", "Ridge"))
+
+ggsave("M:/CSG Google Drive/ARGOS BLVU/ftpi.png", width = 4, height = 3, dpi = 600)
+
+cat("
+Ran at: ");Sys.time()
+toc()
+
+```
+
+
+tpicat
+```{r}
+tic()
+#create data frame starting with east
+ftri <- c("High", "Smooth", "Slight", "Low", "Moderate")
+ftri <- as.data.frame(ftri)
+colnames(ftri) <- c("tri")
+ftri$coef <- c(0, fcoef["tricatsmooth",], fcoef["tricatslight",], fcoef["tricatlow",], fcoef["tricatmoder",])
+ftri$lcl <- c(0, fci["tricatsmooth","2.5 %"], fci["tricatslight","2.5 %"], fci["tricatlow","2.5 %"], fci["tricatmoder","2.5 %"])
+ftri$ucl <- c(0, fci["tricatsmooth","97.5 %"], fci["tricatslight","97.5 %"], fci["tricatlow","97.5 %"], fci["tricatmoder","97.5 %"])
+
+
+
+ftri$mean <- (fcoef["(Intercept",] + 
+  mean(blvu1$slopes)*fcoef["slopes",] + mean(blvu1$slopes^2)*fcoef["slope2s",] +
+  mean(blvu1$east)*fcoef["east",] +
+  mean(blvu1$north)*fcoef["north",] +
+  mean(blvu1$dems)*fcoef["dems",] +  mean(blvu1$dems^2)*fcoef["dem2s",] + 
+  mean(blvu1$dprds)*fcoef["dprds",] +  mean(blvu1$dprds^2)*fcoef["dprd2s",] + 
+  mean(blvu1$dsrds)*fcoef["dsrds",] + mean(blvu1$dsrds^2)*fcoef["dsrd2s",] + 
+  mean(blvu1$dsolids)*fcoef["dsolids",] +  mean(blvu1$dsolids^2)*fcoef["dsolid2s",] + 
+  ftri$coef +
+  fcoef["tpicatvalley",] +
+  fcoef["nlcdcatforest",] 
+    )
+
+ftri$lower <- (fci["(Intercept)", "2.5 %"] +
+  mean(blvu1$slopes)*fci["slopes","2.5 %"] +  mean(blvu1$slopes^2)*fci["slope2s","2.5 %"]+
+  mean(blvu1$east)*fci["east","2.5 %"] + 
+  mean(blvu1$north)*fci["north","2.5 %"] +
+  mean(blvu1$dems)*fci["dems","2.5 %"] + mean(blvu1$dems^2)*fci["dem2s","2.5 %"] + 
+  mean(blvu1$dprds)*fci["dprds","2.5 %"] + mean(blvu1$dprds^2)*fci["dprd2s","2.5 %"] + 
+  mean(blvu1$dsrds)*fci["dsrds","2.5 %"] + mean(blvu1$dsrds^2)*fci["dsrd2s","2.5 %"] + 
+  mean(blvu1$dsolids)*fci["dsolids","2.5 %"] + mean(blvu1$dsolids^2)*fci["dsolid2s","2.5 %"] + 
+  ftri$lcl + 
+  fci["tpicatvalley","2.5 %"] +
+  fci["nlcdcatforest","2.5 %"] 
+    )
+  
+
+ftri$upper <- (fci["(Intercept)", "97.5 %"] +
+  mean(blvu1$slopes)*fci["slopes","97.5 %"]+mean(blvu1$slopes^2)*fci["slope2s","97.5 %"]+
+  mean(blvu1$east)*fci["east","97.5 %"] + 
+  mean(blvu1$north)*fci["north","97.5 %"] +
+  mean(blvu1$dems)*fci["dems","97.5 %"] + mean(blvu1$dems^2)*fci["dem2s","97.5 %"] + 
+  mean(blvu1$dprds)*fci["dprds","97.5 %"] + mean(blvu1$dprds^2)*fci["dprd2s","97.5 %"] + 
+  mean(blvu1$dsrds)*fci["dsrds","97.5 %"] + mean(blvu1$dsrds^2)*fci["dsrd2s","97.5 %"] + 
+  mean(blvu1$dsolids)*fci["dsolids","97.5 %"] + mean(blvu1$dsolids^2)*fci["dsolid2s","97.5 %"] + 
+ ftri$ucl + 
+  fci["tpicatvalley","97.5 %"] +
+  fci["nlcdcatforest","97.5 %"] 
+    )
+
+
+ggplot(data = ftri, aes(x = tri, y = mean)) + 
+  thm +
+geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, color = "grey60") +
+geom_point (color = "black", size = 0.5) +   
+ylab("Flight altitude above ground level (m)") + xlab("Topographic roughness")+
+scale_y_continuous( expand = c(0,0),limits = c(0, 750))+
+scale_x_discrete(limits = c("Smooth", "Slight", "Low", "Moderate", "High"),labels = c("Smooth", "Slight", "Low", "Moderate", "High"))
+
+ggsave("M:/CSG Google Drive/ARGOS BLVU/ftri.png", width = 4, height = 3, dpi = 600)
+
+cat("
+Ran at: ");Sys.time()
+toc()
+
+```
+
+
+nlcdcat
+```{r}
+tic()
+#create data frame starting with east
+fnlcd <- c("Agriculture", "Bare", "Developed", "Forest", "Grass", "Shrub" , "Water", "Wetland")
+fnlcd <- as.data.frame(fnlcd)
+colnames(fnlcd) <- c("nlcd")
+
+fnlcd$coef <- c(0, fcoef["nlcdcatbare",], fcoef["nlcdcatdevel",], fcoef["nlcdcatforest",], fcoef["nlcdcatgrass",], fcoef["nlcdcatshrub",], fcoef["nlcdcatwater",], fcoef["nlcdcatwetland",])
+
+fnlcd$lcl <- c(0, fci["nlcdcatbare","2.5 %"], fci["nlcdcatdevel","2.5 %"], fci["nlcdcatforest","2.5 %"], fci["nlcdcatgrass","2.5 %"], fci["nlcdcatshrub","2.5 %"], fci["nlcdcatwater","2.5 %"], fci["nlcdcatwetland","2.5 %"])
+
+fnlcd$ucl <- c(0, fci["nlcdcatbare","97.5 %"], fci["nlcdcatdevel","97.5 %"], fci["nlcdcatforest","97.5 %"], fci["nlcdcatgrass","97.5 %"], fci["nlcdcatshrub","97.5 %"], fci["nlcdcatwater","97.5 %"], fci["nlcdcatwetland","97.5 %"])
+
+
+fnlcd$mean <- (fcoef["(Intercept",] + 
+  mean(blvu1$slopes)*fcoef["slopes",] + mean(blvu1$slopes^2)*fcoef["slope2s",] +
+  mean(blvu1$east)*fcoef["east",] +
+  mean(blvu1$north)*fcoef["north",] +
+  mean(blvu1$dems)*fcoef["dems",] +  mean(blvu1$dems^2)*fcoef["dem2s",] + 
+  mean(blvu1$dprds)*fcoef["dprds",] +  mean(blvu1$dprds^2)*fcoef["dprd2s",] + 
+  mean(blvu1$dsrds)*fcoef["dsrds",] + mean(blvu1$dsrds^2)*fcoef["dsrd2s",] + 
+  mean(blvu1$dsolids)*fcoef["dsolids",] +  mean(blvu1$dsolids^2)*fcoef["dsolid2s",] + 
+  fnlcd$coef +
+  fcoef["tpicatvalley",] +
+  fcoef["tricatsmooth",] 
+    )
+
+fnlcd$lower <- (fci["(Intercept)", "2.5 %"] +
+  mean(blvu1$slopes)*fci["slopes","2.5 %"] +  mean(blvu1$slopes^2)*fci["slope2s","2.5 %"]+
+  mean(blvu1$east)*fci["east","2.5 %"] + 
+  mean(blvu1$north)*fci["north","2.5 %"] +
+  mean(blvu1$dems)*fci["dems","2.5 %"] + mean(blvu1$dems^2)*fci["dem2s","2.5 %"] + 
+  mean(blvu1$dprds)*fci["dprds","2.5 %"] + mean(blvu1$dprds^2)*fci["dprd2s","2.5 %"] + 
+  mean(blvu1$dsrds)*fci["dsrds","2.5 %"] + mean(blvu1$dsrds^2)*fci["dsrd2s","2.5 %"] + 
+  mean(blvu1$dsolids)*fci["dsolids","2.5 %"] + mean(blvu1$dsolids^2)*fci["dsolid2s","2.5 %"] + 
+  fnlcd$lcl + 
+  fci["tpicatvalley","2.5 %"] +
+  fci["tricatsmooth","2.5 %"] 
+    )
+  
+
+fnlcd$upper <- (fci["(Intercept)", "97.5 %"] +
+  mean(blvu1$slopes)*fci["slopes","97.5 %"]+mean(blvu1$slopes^2)*fci["slope2s","97.5 %"]+
+  mean(blvu1$east)*fci["east","97.5 %"] + 
+  mean(blvu1$north)*fci["north","97.5 %"] +
+  mean(blvu1$dems)*fci["dems","97.5 %"] + mean(blvu1$dems^2)*fci["dem2s","97.5 %"] + 
+  mean(blvu1$dprds)*fci["dprds","97.5 %"] + mean(blvu1$dprds^2)*fci["dprd2s","97.5 %"] + 
+  mean(blvu1$dsrds)*fci["dsrds","97.5 %"] + mean(blvu1$dsrds^2)*fci["dsrd2s","97.5 %"] + 
+  mean(blvu1$dsolids)*fci["dsolids","97.5 %"] + mean(blvu1$dsolids^2)*fci["dsolid2s","97.5 %"] + 
+ fnlcd$ucl + 
+  fci["tpicatvalley","97.5 %"] +
+  fci["tricatsmooth","97.5 %"] 
+    )
+
+
+ggplot(data = fnlcd, aes(x = nlcd, y = mean)) + 
+  thm +
+geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, color = "grey60") +
+geom_point (color = "black", size = 0.5) +   
+ylab("Flight altitude above ground level (m)") + xlab("Land cover")+
+scale_y_continuous( expand = c(0,0),limits = c(-15, 750))+
+scale_x_discrete(limits = c("Agriculture", "Bare", "Developed", "Forest", "Grass", "Shrub" , "Water", "Wetland"), labels = c("Agriculture", "Bare", "Developed", "Forest", "Grass", "Shrub" , "Water", "Wetland"))
+
+ggsave("M:/CSG Google Drive/ARGOS BLVU/fnlcd.png", width = 5, height = 3, dpi = 600)
+
+cat("
+Ran at: ");Sys.time()
+toc()
+
+```

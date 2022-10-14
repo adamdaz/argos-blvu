@@ -1,0 +1,850 @@
+---
+title: "Summary data ARGOS BLVU"
+author: "Adam Duerr"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+clear environment 
+```{r}
+# rm(list = ls())
+
+```
+
+
+
+libraries
+```{r}
+library(usethis) #git stuff
+library(renv) #versioning tools
+library(tictoc) #tracking time
+library(data.table) #allows multi-core processing for reading/writing tables = fast!
+library(lme4)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ResourceSelection)
+library(MuMIn)
+library(boot)
+```
+
+Read data
+
+```{r}
+tic()
+
+ data1 <- fread("M:/R/argos-blvu/data1_1.csv")
+ blvu1 <- fread("M:/R/argos-blvu/blvu1_1.csv")
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+data1
+
+replicate any modifications to the data to get accurate results
+```{r}
+tic()
+
+c <- c("east","north","dem", "dsolid", "dsrd", "dprd", "dforest", "slope")
+
+means.data1 <- colMeans(data1[,c("east","north","dem", "dsolid", "dsrd", "dprd", "dforest", "slope")] )
+
+sd.data1 <- sapply(data1[,c("east","north","dem", "dsolid", "dsrd", "dprd", "dforest", "slope")], sd)
+
+min.data1 <- sapply(data1[,c("east","north","dem", "dsolid", "dsrd", "dprd", "dforest", "slope")], min)
+
+max.data1 <- sapply(data1[,c("east","north","dem", "dsolid", "dsrd", "dprd", "dforest", "slope")], max)
+
+cat("
+Ran at: ");Sys.time()
+toc()
+```
+
+
+Global model for BLVU RSF
+
+```{r}
+ glm1 <- readRDS("glm1.rds")
+```
+
+
+
+Set up theme for plots
+```{r}
+thm <- theme_classic(base_size = 10, base_family = "serif") + 
+  theme(strip.background = element_blank()) + 
+  theme(axis.text = element_text( size = 9, color = "black" ), 
+        axis.title = element_text( size = 10, color = "black"),
+        strip.text = element_text(size = 10, color = "black"))
+
+dev.new(width = 3, height = 3, unit = "in")
+ 
+cat("last ran"); timestamp()
+```
+
+11 variables
+continuous 
+east, north, slope, dsolid, dprd, dsrd, dforest, dem
+categorical 
+nlcd, tricat, tpicat
+
+
+
+
+setup data for plots
+```{r}
+tic()
+# save coefficients to vector (df)
+
+coef <- as.data.frame(coef(glm1))
+
+#condidence limits - takes a long time
+# ci <- confint(glm1)
+
+# write.csv(ci, "ci.csv")
+
+ci2 <- read.csv("ci.csv")
+
+
+ci <- ci2[,2:3]
+rownames(ci) <- ci2[,1]
+colnames(ci) <- c("2.5 %", "97.5 %")
+
+ci 
+
+cat("
+Ran at: ");Sys.time()
+toc()
+
+
+```
+
+
+east
+```{r}
+tic()
+#create data frame starting with east
+east <- seq(min.data1["east"], max.data1["east"], length.out = 500 )
+east <- as.data.frame(east)
+colnames(east) <- c("east")
+
+east$mean <- inv.logit(
+  mean(blvu1$slopes)*coef["slopes",]+
+  east$east*coef["east",] + 
+  mean(blvu1$north)*coef["north",] +
+  mean(blvu1$dems)*coef["dems",] + 
+  mean(blvu1$dprds)*coef["dprds",] + 
+  mean(blvu1$dsrds)*coef["dsrds",] + 
+  mean(blvu1$dsolids)*coef["dsolids",] + 
+  coef["tpicatvalley",] + 
+  coef["tricatsmooth",] +
+  coef["nlcdcatforest",] 
+    )
+
+east$lower <- inv.logit(
+  mean(blvu1$slopes)*ci["slopes","2.5 %"]+
+  east$east*ci["east","2.5 %"] + 
+  mean(blvu1$north)*ci["north","2.5 %"] +
+  mean(blvu1$dems)*ci["dems","2.5 %"] + 
+  mean(blvu1$dprds)*ci["dprds","2.5 %"] + 
+  mean(blvu1$dsrds)*ci["dsrds","2.5 %"] + 
+  mean(blvu1$dsolids)*ci["dsolids","2.5 %"] + 
+  ci["tpicatvalley","2.5 %"] + 
+  ci["tricatsmooth","2.5 %"] +
+  ci["nlcdcatforest","2.5 %"] 
+    )
+  
+
+east$upper <- inv.logit(
+  mean(blvu1$slopes)*ci["slopes","97.5 %"]+
+  east$east*ci["east","97.5 %"] + 
+  mean(blvu1$north)*ci["north","97.5 %"] +
+  mean(blvu1$dems)*ci["dems","97.5 %"] + 
+  mean(blvu1$dprds)*ci["dprds","97.5 %"] + 
+  mean(blvu1$dsrds)*ci["dsrds","97.5 %"] + 
+  mean(blvu1$dsolids)*ci["dsolids","97.5 %"] + 
+  ci["tpicatvalley","97.5 %"] + 
+  ci["tricatsmooth","97.5 %"] +
+  ci["nlcdcatforest","97.5 %"] 
+    )
+
+
+ggplot(data = east, aes(x = east, y = mean)) + 
+  thm +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, color = "grey60") +
+  geom_point (color = "black", size = 0.5) +   
+  ylab("Relative selection") + xlab("Eastness") +
+  scale_y_continuous(limits = c(0,0.75))
+
+ggsave("M:/CSG Google Drive/ARGOS BLVU/eastness.png", width = 3, height = 3, dpi = 600)
+
+cat("
+Ran at: ");Sys.time()
+toc()
+
+```
+
+
+north
+```{r}
+tic()
+#create data frame starting with north
+north <- seq(min.data1["north"], max.data1["north"], length.out = 500 )
+north <- as.data.frame(north)
+colnames(north) <- c("north")
+
+north$mean <- inv.logit(
+  mean(blvu1$slopes)*coef["slopes",]+
+  north$north*coef["north",] + 
+  mean(blvu1$east)*coef["east",] +
+  mean(blvu1$dems)*coef["dems",] + 
+  mean(blvu1$dprds)*coef["dprds",] + 
+  mean(blvu1$dsrds)*coef["dsrds",] + 
+  mean(blvu1$dsolids)*coef["dsolids",] + 
+  coef["tpicatvalley",] + 
+  coef["tricatsmooth",] +
+  coef["nlcdcatforest",] 
+    )
+
+  north$lower <- inv.logit(
+  mean(blvu1$slopes)*ci["slopes","2.5 %"]+
+  north$north*ci["north","2.5 %"] + 
+  mean(blvu1$east)*ci["east","2.5 %"] +
+  mean(blvu1$dems)*ci["dems","2.5 %"] + 
+  mean(blvu1$dprds)*ci["dprds","2.5 %"] + 
+  mean(blvu1$dsrds)*ci["dsrds","2.5 %"] + 
+  mean(blvu1$dsolids)*ci["dsolids","2.5 %"] + 
+  ci["tpicatvalley","2.5 %"] + 
+  ci["tricatsmooth","2.5 %"] +
+  ci["nlcdcatforest","2.5 %"] 
+    )
+  
+
+north$upper <- inv.logit(
+  mean(blvu1$slopes)*ci["slopes","97.5 %"]+
+  north$north*ci["north","97.5 %"] + 
+  mean(blvu1$east)*ci["east","97.5 %"] +
+  mean(blvu1$dems)*ci["dems","97.5 %"] + 
+  mean(blvu1$dprds)*ci["dprds","97.5 %"] + 
+  mean(blvu1$dsrds)*ci["dsrds","97.5 %"] + 
+  mean(blvu1$dsolids)*ci["dsolids","97.5 %"] + 
+  ci["tpicatvalley","97.5 %"] + 
+  ci["tricatsmooth","97.5 %"] +
+  ci["nlcdcatforest","97.5 %"] 
+    )
+
+
+ggplot(data = north, aes(x = north, y = mean)) + thm +
+ geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, color = "grey60") +
+   geom_point (color = "black", size =.5)+
+ylab("Relative selection") + xlab("Northness") +
+  #  scale_x_discrete(limits=c("shrub", "grass","ag", "misc", "forest"), labels = c("Shr.", "Gr.", "Ag.", "For.", "Mis.")) + 
+  scale_y_continuous(limits = c(0,0.75))
+
+ggsave("M:/CSG Google Drive/ARGOS BLVU/northness.png", width = 3, height = 3, dpi = 600)
+
+cat("
+Ran at: ");Sys.time()
+toc()
+
+```
+
+
+
+slopes
+```{r}
+tic()
+#create data frame starting with slopes
+slope <- seq(min.data1["slope"], max.data1["slope"], length.out = 500 )
+slope <- as.data.frame(slope)
+colnames(slope) <- c("slope")
+slope$scaled <- (slope$slope - means.data1["slope"])/sd.data1["slope"]
+
+slope$mean <- inv.logit(
+  slope$scaled*coef["slopes",] + 
+  mean(blvu1$east)*coef["east",]+
+  mean(blvu1$north)*coef["north",] +
+  mean(blvu1$dems)*coef["dems",] + 
+  mean(blvu1$dprds)*coef["dprds",] + 
+  mean(blvu1$dsrds)*coef["dsrds",] + 
+  mean(blvu1$dsolids)*coef["dsolids",] + 
+  coef["tpicatvalley",] + 
+  coef["tricatsmooth",] +
+  coef["nlcdcatforest",] 
+    )
+
+slope$lower <- inv.logit(
+  mean(blvu1$east)*ci["east","2.5 %"]+
+  slope$scaled*ci["slopes","2.5 %"] + 
+  mean(blvu1$north)*ci["north","2.5 %"] +
+  mean(blvu1$dems)*ci["dems","2.5 %"] + 
+  mean(blvu1$dprds)*ci["dprds","2.5 %"] + 
+  mean(blvu1$dsrds)*ci["dsrds","2.5 %"] + 
+  mean(blvu1$dsolids)*ci["dsolids","2.5 %"] + 
+  ci["tpicatvalley","2.5 %"] + 
+  ci["tricatsmooth","2.5 %"] +
+  ci["nlcdcatforest","2.5 %"] 
+    )
+  
+
+slope$upper <- inv.logit(
+  mean(blvu1$east)*ci["east","97.5 %"]+
+  slope$scaled*ci["slopes","97.5 %"] + 
+  mean(blvu1$north)*ci["north","97.5 %"] +
+  mean(blvu1$dems)*ci["dems","97.5 %"] + 
+  mean(blvu1$dprds)*ci["dprds","97.5 %"] + 
+  mean(blvu1$dsrds)*ci["dsrds","97.5 %"] + 
+  mean(blvu1$dsolids)*ci["dsolids","97.5 %"] + 
+  ci["tpicatvalley","97.5 %"] + 
+  ci["tricatsmooth","97.5 %"] +
+  ci["nlcdcatforest","97.5 %"] 
+    )
+  
+
+
+ggplot(data = slope, aes(x = slope, y = mean)) + 
+thm +
+geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, color = "grey60" ) +
+    geom_point (color = "black", size = .5) + 
+ylab("Relative selection") + xlab("Slope (%)") +
+  #  scale_x_discrete(limits=c("shrub", "grass","ag", "misc", "forest"), labels = c("Shr.", "Gr.", "Ag.", "For.", "Mis.")) + 
+  scale_y_continuous(limits = c(0,0.75))
+
+ggsave("M:/CSG Google Drive/ARGOS BLVU/slopes.png", width = 3, height = 3, dpi = 600)
+
+cat("
+Ran at: ");Sys.time()
+toc()
+
+```
+
+
+
+
+dem
+```{r}
+tic()
+#create data frame starting with dems
+dem <- seq(min.data1["dem"], max.data1["dem"], length.out = 500 )
+dem <- as.data.frame(dem)
+colnames(dem) <- c("dem")
+dem$scaled <- (dem$dem - means.data1["dem"])/sd.data1["dem"]
+
+dem$mean <- inv.logit(
+  dem$scaled*coef["dems",] + 
+  mean(blvu1$slopes)*coef["slopes",] +  
+  mean(blvu1$east)*coef["east",]+
+  mean(blvu1$north)*coef["north",] +
+  mean(blvu1$dprds)*coef["dprds",] + 
+  mean(blvu1$dsrds)*coef["dsrds",] + 
+  mean(blvu1$dsolids)*coef["dsolids",] + 
+  coef["tpicatvalley",] + 
+  coef["tricatsmooth",] +
+  coef["nlcdcatforest",] 
+    )
+
+
+dem$lower <- inv.logit(
+  mean(blvu1$east)*ci["east","2.5 %"]+
+  dem$scaled*ci["dems","2.5 %"] + 
+  mean(blvu1$north)*ci["north","2.5 %"] +
+  mean(blvu1$slopes)*ci["slopes","2.5 %"] + 
+  mean(blvu1$dprds)*ci["dprds","2.5 %"] + 
+  mean(blvu1$dsrds)*ci["dsrds","2.5 %"] + 
+  mean(blvu1$dsolids)*ci["dsolids","2.5 %"] + 
+  ci["tpicatvalley","2.5 %"] + 
+  ci["tricatsmooth","2.5 %"] +
+  ci["nlcdcatforest","2.5 %"] 
+    )
+  
+
+dem$upper <- inv.logit(
+  mean(blvu1$east)*ci["east","97.5 %"]+
+  dem$scaled*ci["dems","97.5 %"] + 
+  mean(blvu1$north)*ci["north","97.5 %"] +
+  mean(blvu1$slopes)*ci["slopes","97.5 %"] + 
+  mean(blvu1$dprds)*ci["dprds","97.5 %"] + 
+  mean(blvu1$dsrds)*ci["dsrds","97.5 %"] + 
+  mean(blvu1$dsolids)*ci["dsolids","97.5 %"] + 
+  ci["tpicatvalley","97.5 %"] + 
+  ci["tricatsmooth","97.5 %"] +
+  ci["nlcdcatforest","97.5 %"] 
+    )
+  
+
+
+ggplot(data = dem, aes(x = dem, y = mean)) + 
+ thm +
+ geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, color = "grey60") +
+ geom_point (color = "black", size = .5) + 
+  ylab("Relative selection") + xlab("Elevation (m)") +
+  #  scale_x_discrete(limits=c("shrub", "grass","ag", "misc", "forest"), labels = c("Shr.", "Gr.", "Ag.", "For.", "Mis.")) + 
+  scale_y_continuous(limits = c(0,0.75))
+
+ggsave("M:/CSG Google Drive/ARGOS BLVU/elevation.png", width = 3, height = 3, dpi = 600)
+
+cat("
+Ran at: ");Sys.time()
+toc()
+
+```
+
+
+
+
+
+dprd
+```{r}
+tic()
+#create data frame starting with dprds
+dprd <- seq(min.data1["dprd"], max.data1["dprd"], length.out = 500 )
+dprd <- as.data.frame(dprd)
+colnames(dprd) <- c("dprd")
+dprd$scaled <- (dprd$dprd - means.data1["dprd"])/sd.data1["dprd"]
+
+dprd$mean <- inv.logit(
+  dprd$scaled*coef["dprds",] + 
+  mean(blvu1$slopes)*coef["slopes",] +  
+  mean(blvu1$east)*coef["east",]+
+  mean(blvu1$north)*coef["north",] +
+  mean(blvu1$dems)*coef["dems",] + 
+  mean(blvu1$dsrds)*coef["dsrds",] + 
+  mean(blvu1$dsolids)*coef["dsolids",] + 
+  coef["tpicatvalley",] + 
+  coef["tricatsmooth",] +
+  coef["nlcdcatforest",] 
+    )
+
+
+
+dprd$lower <- inv.logit(
+  mean(blvu1$east)*ci["east","2.5 %"]+
+  dprd$scaled*ci["dprds","2.5 %"] + 
+  mean(blvu1$north)*ci["north","2.5 %"] +
+  mean(blvu1$slopes)*ci["slopes","2.5 %"] + 
+  mean(blvu1$dems)*ci["dems","2.5 %"] + 
+  mean(blvu1$dsrds)*ci["dsrds","2.5 %"] + 
+  mean(blvu1$dsolids)*ci["dsolids","2.5 %"] + 
+  ci["tpicatvalley","2.5 %"] + 
+  ci["tricatsmooth","2.5 %"] +
+  ci["nlcdcatforest","2.5 %"] 
+    )
+  
+
+dprd$upper <- inv.logit(
+  mean(blvu1$east)*ci["east","97.5 %"]+
+  dprd$scaled*ci["dprds","97.5 %"] + 
+  mean(blvu1$north)*ci["north","97.5 %"] +
+  mean(blvu1$slopes)*ci["slopes","97.5 %"] + 
+  mean(blvu1$dems)*ci["dems","97.5 %"] + 
+  mean(blvu1$dsrds)*ci["dsrds","97.5 %"] + 
+  mean(blvu1$dsolids)*ci["dsolids","97.5 %"] + 
+  ci["tpicatvalley","97.5 %"] + 
+  ci["tricatsmooth","97.5 %"] +
+  ci["nlcdcatforest","97.5 %"] 
+    )
+  
+
+
+
+ggplot(data = dprd, aes(x = dprd, y = mean)) +  thm +
+geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, color = "grey60") +
+ geom_point (color = "black", size = .5) + 
+ylab("Relative selection") + xlab("Distance to primary roads (m)") +
+ scale_x_continuous(limits = c(0, 85000)) +
+  scale_y_continuous(limits = c(0,0.75))
+
+ggsave("M:/CSG Google Drive/ARGOS BLVU/dprimaryrds.png", width = 3, height = 3, dpi = 600)
+
+cat("
+Ran at: ");Sys.time()
+toc()
+
+```
+
+
+
+
+dsrd
+```{r}
+tic()
+#create data frame starting with dsrds
+dsrd <- seq(min.data1["dsrd"], max.data1["dsrd"], length.out = 500 )
+dsrd <- as.data.frame(dsrd)
+colnames(dsrd) <- c("dsrd")
+dsrd$scaled <- (dsrd$dsrd - means.data1["dsrd"])/sd.data1["dsrd"]
+
+dsrd$mean <- inv.logit(
+  dsrd$scaled*coef["dsrds",] + 
+  mean(blvu1$slopes)*coef["slopes",] +  
+  mean(blvu1$east)*coef["east",]+
+  mean(blvu1$north)*coef["north",] +
+  mean(blvu1$dprds)*coef["dprds",] + 
+  mean(blvu1$dems)*coef["dems",] + 
+  mean(blvu1$dsolids)*coef["dsolids",] + 
+  coef["tpicatvalley",] + 
+  coef["tricatsmooth",] +
+  coef["nlcdcatforest",] 
+    )
+
+
+
+dsrd$lower <- inv.logit(
+  mean(blvu1$east)*ci["east","2.5 %"]+
+  dsrd$scaled*ci["dsrds","2.5 %"] + 
+  mean(blvu1$north)*ci["north","2.5 %"] +
+  mean(blvu1$slopes)*ci["slopes","2.5 %"] + 
+  mean(blvu1$dems)*ci["dems","2.5 %"] + 
+  mean(blvu1$dprds)*ci["dprds","2.5 %"] + 
+  mean(blvu1$dsolids)*ci["dsolids","2.5 %"] + 
+  ci["tpicatvalley","2.5 %"] + 
+  ci["tricatsmooth","2.5 %"] +
+  ci["nlcdcatforest","2.5 %"] 
+    )
+  
+
+dsrd$upper <- inv.logit(
+  mean(blvu1$east)*ci["east","97.5 %"]+
+  dsrd$scaled*ci["dsrds","97.5 %"] + 
+  mean(blvu1$north)*ci["north","97.5 %"] +
+  mean(blvu1$slopes)*ci["slopes","97.5 %"] + 
+  mean(blvu1$dems)*ci["dems","97.5 %"] + 
+  mean(blvu1$dprds)*ci["dprds","97.5 %"] + 
+  mean(blvu1$dsolids)*ci["dsolids","97.5 %"] + 
+  ci["tpicatvalley","97.5 %"] + 
+  ci["tricatsmooth","97.5 %"] +
+  ci["nlcdcatforest","97.5 %"] 
+    )
+  
+
+
+
+ggplot(data = dsrd, aes(x = dsrd, y = mean)) + 
+geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, color = "grey60") +
+ geom_point (color = "black", size = .5) + 
+thm +
+ # geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
+ylab("Relative selection") + xlab("Distance to secondary roads (m)") +
+  #  scale_x_discrete(limits=c("shrub", "grass","ag", "misc", "forest"), labels = c("Shr.", "Gr.", "Ag.", "For.", "Mis.")) + 
+  scale_y_continuous(limits = c(0,0.75))
+
+ggsave("M:/CSG Google Drive/ARGOS BLVU/dsecondaryrds.png", width = 3, height = 3, dpi = 600)
+
+cat("
+Ran at: ");Sys.time()
+toc()
+
+```
+
+
+
+dsolid
+```{r}
+tic()
+#create data frame starting with dsolids
+dsolid <- seq(min.data1["dsolid"], max.data1["dsolid"], length.out = 500 )
+dsolid <- as.data.frame(dsolid)
+colnames(dsolid) <- c("dsolid")
+dsolid$scaled <- (dsolid$dsolid - means.data1["dsolid"])/sd.data1["dsolid"]
+
+dsolid$mean <- inv.logit(
+  dsolid$scaled*coef["dsolids",] + 
+  mean(blvu1$slopes)*coef["slopes",] +  
+  mean(blvu1$east)*coef["east",]+
+  mean(blvu1$north)*coef["north",] +
+  mean(blvu1$dprds)*coef["dprds",] + 
+  mean(blvu1$dsrds)*coef["dsrds",] + 
+  mean(blvu1$dems)*coef["dems",] + 
+  coef["tpicatvalley",] + 
+  coef["tricatsmooth",] +
+  coef["nlcdcatforest",] 
+    )
+
+  
+
+dsolid$lower <- inv.logit(
+  mean(blvu1$east)*ci["east","2.5 %"]+
+  dsolid$scaled*ci["dsolids","2.5 %"] + 
+  mean(blvu1$north)*ci["north","2.5 %"] +
+  mean(blvu1$slopes)*ci["slopes","2.5 %"] + 
+  mean(blvu1$dems)*ci["dems","2.5 %"] + 
+  mean(blvu1$dsrds)*ci["dsrds","2.5 %"] + 
+  mean(blvu1$dprds)*ci["dprds","2.5 %"] + 
+  ci["tpicatvalley","2.5 %"] + 
+  ci["tricatsmooth","2.5 %"] +
+  ci["nlcdcatforest","2.5 %"] 
+    )
+  
+
+dsolid$upper <- inv.logit(
+  mean(blvu1$east)*ci["east","97.5 %"]+
+  dsolid$scaled*ci["dsolids","97.5 %"] + 
+  mean(blvu1$north)*ci["north","97.5 %"] +
+  mean(blvu1$slopes)*ci["slopes","97.5 %"] + 
+  mean(blvu1$dems)*ci["dems","97.5 %"] + 
+  mean(blvu1$dsrds)*ci["dsrds","97.5 %"] + 
+  mean(blvu1$dprds)*ci["dprds","97.5 %"] + 
+  ci["tpicatvalley","97.5 %"] + 
+  ci["tricatsmooth","97.5 %"] +
+  ci["nlcdcatforest","97.5 %"] 
+    )
+  
+
+
+
+ggplot(data = dsolid, aes(x = dsolid, y = mean)) +  thm +
+geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, color = "grey60") +
+ geom_point (color = "black", size = .5) + 
+thm +
+
+ylab("Relative selection") + xlab("Distance to solid waste facilities (m)") +
+  scale_y_continuous(limits = c(0,0.75))
+
+ggsave("M:/CSG Google Drive/ARGOS BLVU/dsolidwaste.png", width = 3., height = 3, dpi = 600)
+
+cat("
+Ran at: ");Sys.time()
+toc()
+
+```
+
+
+
+
+tpicat
+```{r}
+tic()
+#create data frame starting with dems
+tpi <- c("Valley", "Gentle slope", "Steep slope", "Ridge")
+tpi <- as.data.frame(tpi)
+colnames(tpi) <- c("tpi")
+tpi$coef <- c(coef["tpicatvalley",], coef["tpicatgentle",], coef["tpicatsteep",], coef["tpicatridge",])
+tpi$lcl <- c(ci["tpicatvalley", "2.5 %"], ci["tpicatgentle", "2.5 %"], ci["tpicatsteep", "2.5 %"], ci["tpicatridge", "2.5 %"])
+tpi$ucl <- c(ci["tpicatvalley", "97.5 %"], ci["tpicatgentle", "97.5 %"], ci["tpicatsteep", "97.5 %"], ci["tpicatridge", "97.5 %"])
+
+tpi$mean <- inv.logit(
+  mean(blvu1$slopes)*coef["slopes",] +  
+  mean(blvu1$dems)*coef["dems",] + 
+  mean(blvu1$east)*coef["east",]+
+  mean(blvu1$north)*coef["north",] +
+  mean(blvu1$dprds)*coef["dprds",] + 
+  mean(blvu1$dsrds)*coef["dsrds",] + 
+  mean(blvu1$dsolids)*coef["dsolids",] + 
+  coef["tricatsmooth",] +
+  coef["nlcdcatforest",] +
+  tpi$coef
+    
+    )
+
+tpi$lower <- inv.logit(
+  mean(blvu1$east)*ci["east","2.5 %"]+
+  mean(blvu1$dsolids)*ci["dsolids","2.5 %"] + 
+  mean(blvu1$north)*ci["north","2.5 %"] +
+  mean(blvu1$slopes)*ci["slopes","2.5 %"] + 
+  mean(blvu1$dems)*ci["dems","2.5 %"] + 
+  mean(blvu1$dsrds)*ci["dsrds","2.5 %"] + 
+  mean(blvu1$dprds)*ci["dprds","2.5 %"] + 
+  ci["tricatsmooth","2.5 %"] +
+  ci["nlcdcatforest","2.5 %"] +
+  tpi$lcl  
+    )
+  
+
+tpi$upper <- inv.logit(
+  mean(blvu1$east)*ci["east","97.5 %"]+
+  mean(blvu1$dsolids)*ci["dsolids","97.5 %"] + 
+  mean(blvu1$north)*ci["north","97.5 %"] +
+  mean(blvu1$slopes)*ci["slopes","97.5 %"] + 
+  mean(blvu1$dems)*ci["dems","97.5 %"] + 
+  mean(blvu1$dsrds)*ci["dsrds","97.5 %"] + 
+  mean(blvu1$dprds)*ci["dprds","97.5 %"] + 
+  ci["tricatsmooth","97.5 %"] +
+  ci["nlcdcatforest","97.5 %"] +
+    tpi$ucl
+    )
+  
+
+  
+
+
+ggplot(data = tpi, aes(x = tpi, y = mean)) + 
+ geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, color ="grey60") +
+    geom_point (color = "black", size = 0.5) + thm +
+ylab("Relative selection") + xlab("Topographic position") +
+scale_x_discrete(limits = c("Valley", "Gentle slope", "Steep slope", "Ridge")) + 
+  scale_y_continuous(limits = c(0,0.75))
+
+ggsave("M:/CSG Google Drive/ARGOS BLVU/tpi.png", width = 4, height = 3, dpi = 600)
+
+cat("
+Ran at: ");Sys.time()
+toc()
+
+```
+
+
+
+
+tricat
+```{r}
+tic()
+#create data frame starting with dems
+tri <- c("High", "Smooth", "Slight", "Low", "Moderate")
+tri <- as.data.frame(tri)
+colnames(tri) <- c("tri")
+tri$coef <- c(0, coef["tricatsmooth",], coef["tricatslight",], coef["tricatlow",], coef["tricatmoder",])
+tri$lcl <- c(0, ci["tricatsmooth","2.5 %"], ci["tricatslight","2.5 %"], ci["tricatlow","2.5 %"], ci["tricatmoder","2.5 %"])
+tri$ucl <- c(0, ci["tricatsmooth","97.5 %"], ci["tricatslight","97.5 %"], ci["tricatlow","97.5 %"], ci["tricatmoder","97.5 %"])
+
+tri$mean <- inv.logit(
+  mean(blvu1$slopes)*coef["slopes",] +  
+  mean(blvu1$dems)*coef["dems",] + 
+  mean(blvu1$east)*coef["east",]+
+  mean(blvu1$north)*coef["north",] +
+  mean(blvu1$dprds)*coef["dprds",] + 
+  mean(blvu1$dsrds)*coef["dsrds",] + 
+  mean(blvu1$dsolids)*coef["dsolids",] + 
+  coef["tpicatvalley",] +
+  coef["nlcdcatforest",] +
+  tri$coef  
+    
+    )
+
+tri$lower <- inv.logit(
+  mean(blvu1$east)*ci["east","2.5 %"]+
+  mean(blvu1$dsolids)*ci["dsolids","2.5 %"] + 
+  mean(blvu1$north)*ci["north","2.5 %"] +
+  mean(blvu1$slopes)*ci["slopes","2.5 %"] + 
+  mean(blvu1$dems)*ci["dems","2.5 %"] + 
+  mean(blvu1$dsrds)*ci["dsrds","2.5 %"] + 
+  mean(blvu1$dprds)*ci["dprds","2.5 %"] + 
+  ci["tpicatvalley","2.5 %"] +
+  ci["nlcdcatforest","2.5 %"] +
+  tri$lcl  
+    )
+  
+
+tri$upper <- inv.logit(
+  mean(blvu1$east)*ci["east","97.5 %"]+
+  mean(blvu1$dsolids)*ci["dsolids","97.5 %"] + 
+  mean(blvu1$north)*ci["north","97.5 %"] +
+  mean(blvu1$slopes)*ci["slopes","97.5 %"] + 
+  mean(blvu1$dems)*ci["dems","97.5 %"] + 
+  mean(blvu1$dsrds)*ci["dsrds","97.5 %"] + 
+  mean(blvu1$dprds)*ci["dprds","97.5 %"] + 
+  ci["tpicatvalley","97.5 %"] +
+  ci["nlcdcatforest","97.5 %"] +
+    tri$ucl
+    )
+  
+
+  
+  
+
+
+ggplot(data = tri, aes(x = tri, y = mean)) + 
+geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, color = "grey60") +
+    geom_point (color = "black", size = 0.5) + thm +
+ylab("Relative selection") + xlab("Topographic roughness") +
+scale_x_discrete(limits = c("Smooth", "Slight", "Low", "Moderate", "High"), labels = c("Smooth", "Slight", "Low", "Moderate", "High")) + 
+  scale_y_continuous(limits = c(0,0.75))
+
+ggsave("M:/CSG Google Drive/ARGOS BLVU/tri.png", width = 4, height = 3, dpi = 600)
+cat("
+Ran at: ");Sys.time()
+toc()
+
+```
+
+
+
+
+nlcdcat
+```{r}
+tic()
+#create data frame starting with dems
+nlcd <- c("Agriculture", "Bare", "Developed", "Forest", "Grass", "Shrub" , "Water", "Wetland")
+nlcd <- as.data.frame(nlcd)
+colnames(nlcd) <- c("nlcd")
+
+nlcd$coef <- c(0, coef["nlcdcatbare",], coef["nlcdcatdevel",], coef["nlcdcatforest",], coef["nlcdcatgrass",], coef["nlcdcatshrub",], coef["nlcdcatwater",], coef["nlcdcatwetland",])
+
+nlcd$lcl <- c(0, ci["nlcdcatbare","2.5 %"], ci["nlcdcatdevel","2.5 %"], ci["nlcdcatforest","2.5 %"], ci["nlcdcatgrass","2.5 %"], ci["nlcdcatshrub","2.5 %"], ci["nlcdcatwater","2.5 %"], ci["nlcdcatwetland","2.5 %"])
+
+nlcd$ucl <- c(0, ci["nlcdcatbare","97.5 %"], ci["nlcdcatdevel","97.5 %"], ci["nlcdcatforest","97.5 %"], ci["nlcdcatgrass","97.5 %"], ci["nlcdcatshrub","97.5 %"], ci["nlcdcatwater","97.5 %"], ci["nlcdcatwetland","97.5 %"])
+
+nlcd$mean <- inv.logit(
+  mean(blvu1$slopes)*coef["slopes",] +  
+  mean(blvu1$dems)*coef["dems",] + 
+  mean(blvu1$east)*coef["east",]+
+  mean(blvu1$north)*coef["north",] +
+  mean(blvu1$dprds)*coef["dprds",] + 
+  mean(blvu1$dsrds)*coef["dsrds",] + 
+  mean(blvu1$dsolids)*coef["dsolids",] + 
+  coef["tpicatvalley",] +
+  coef["tricatsmooth",] +
+  nlcd$coef  
+    
+    )
+
+  
+nlcd$lower <- inv.logit(
+  mean(blvu1$east)*ci["east","2.5 %"]+
+  mean(blvu1$dsolids)*ci["dsolids","2.5 %"] + 
+  mean(blvu1$north)*ci["north","2.5 %"] +
+  mean(blvu1$slopes)*ci["slopes","2.5 %"] + 
+  mean(blvu1$dems)*ci["dems","2.5 %"] + 
+  mean(blvu1$dsrds)*ci["dsrds","2.5 %"] + 
+  mean(blvu1$dprds)*ci["dprds","2.5 %"] + 
+  ci["tpicatvalley","2.5 %"] +
+  ci["tricatsmooth","2.5 %"] +
+  nlcd$lcl  
+    )
+  
+
+nlcd$upper <- inv.logit(
+  mean(blvu1$east)*ci["east","97.5 %"]+
+  mean(blvu1$dsolids)*ci["dsolids","97.5 %"] + 
+  mean(blvu1$north)*ci["north","97.5 %"] +
+  mean(blvu1$slopes)*ci["slopes","97.5 %"] + 
+  mean(blvu1$dems)*ci["dems","97.5 %"] + 
+  mean(blvu1$dsrds)*ci["dsrds","97.5 %"] + 
+  mean(blvu1$dprds)*ci["dprds","97.5 %"] + 
+  ci["tpicatvalley","97.5 %"] +
+  ci["tricatsmooth","97.5 %"] +
+    nlcd$ucl
+    )
+  
+
+
+
+ggplot(data = nlcd, aes(x = nlcd, y = mean)) + 
+geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, color = "grey60") +
+    geom_point (color = "black", size = 0.5) + thm +
+
+ylab("Relative selection") + xlab("Land cover") +
+scale_x_discrete(limits = c("Agriculture", "Bare", "Developed", "Forest", "Grass", "Shrub" , "Water", "Wetland"), labels = c("Agriculture", "Bare", "Developed", "Forest", "Grassland", "Shrubland" , "Water", "Wetland")) + 
+  scale_y_continuous(limits = c(0,0.75))
+
+ggsave("M:/CSG Google Drive/ARGOS BLVU/landcover.png", width = 5, height = 3, dpi = 600)
+
+cat("
+Ran at: ");Sys.time()
+toc()
+
+```
+
+
+
+
+
+
+
+
+
+
